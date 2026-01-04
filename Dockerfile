@@ -25,7 +25,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-COPY --from=frontend-builder /build/out ./static/
+RUN rm -rf ./static/out
+COPY --from=frontend-builder /build/out ./static/out
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o octopus .
 
