@@ -1,76 +1,67 @@
-# Multi-stage Dockerfile for Octopus
-# https://github.com/bestruirui/octopus
+# Stage 1: Build frontend
+FROM node:20-alpine AS frontend-builder
 
-# Stage 1: Build Backend
+WORKDIR /build
+
+# Install pnpm and git
+RUN apk add --no-cache git && \
+    corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy entire project for git info
+COPY . .
+
+WORKDIR /build/web
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Get version from git tag and build
+RUN export APP_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev') && \
+    NEXT_PUBLIC_APP_VERSION=${APP_VERSION} pnpm run build
+
+# Stage 2: Build backend
 FROM golang:1.24-alpine AS backend-builder
 
 WORKDIR /build
 
-RUN apk add --no-cache git curl
+# Install git for version info
+RUN apk add --no-cache git
 
-COPY go.mod go.sum ./
-RUN go mod download
-
+# Copy entire project (need .git for version)
 COPY . .
 
-# Get version from GitHub API
-RUN VERSION=$(curl -sf https://api.github.com/repos/bestruirui/octopus/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' || echo "dev") && \
-    echo "${VERSION}" > /tmp/version && \
-    echo "Detected version: ${VERSION}"
+# Download dependencies
+RUN go mod download
 
-# Remove placeholder
-RUN rm -rf ./static/out && mkdir -p ./static/out
+# Copy frontend build output
+COPY --from=frontend-builder /build/web/out ./static/out
 
-# Stage 2: Build Frontend
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /build/web
-
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-COPY web/package.json web/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
-
-COPY web/ ./
-COPY --from=backend-builder /tmp/version /tmp/version
-
-RUN VERSION=$(cat /tmp/version) && \
-    echo "Building frontend with version: ${VERSION}" && \
-    NEXT_PUBLIC_APP_VERSION=${VERSION} pnpm build && ls -la out/
-
-# Stage 3: Final Backend Build
-FROM backend-builder AS final-builder
-
-COPY --from=frontend-builder /build/web/out/ ./static/out/
-
-# Verify frontend files
-RUN ls -la ./static/out/ && test -f ./static/out/index.html
-
-# Build with version info
-RUN VERSION=$(cat /tmp/version) && \
-    COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
-    BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S') && \
-    echo "Building backend with version: ${VERSION}, commit: ${COMMIT}" && \
+# Build binary with version info from git
+RUN export GIT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev') && \
+    export GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') && \
+    export BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) && \
     CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w \
-    -X 'github.com/bestruirui/octopus/internal/conf.Version=${VERSION}' \
-    -X 'github.com/bestruirui/octopus/internal/conf.Commit=${COMMIT}' \
-    -X 'github.com/bestruirui/octopus/internal/conf.BuildTime=${BUILD_TIME}'" \
+    -ldflags="-X 'github.com/bestruirui/octopus/internal/conf.Version=${GIT_VERSION}' \
+              -X 'github.com/bestruirui/octopus/internal/conf.Commit=${GIT_COMMIT}' \
+              -X 'github.com/bestruirui/octopus/internal/conf.BuildTime=${BUILD_TIME}' \
+              -X 'github.com/bestruirui/octopus/internal/conf.Author=bestrui' \
+              -s -w" \
+    -tags=jsoniter \
     -o octopus .
 
-# Stage 4: Runtime
+# Stage 3: Runtime
 FROM alpine:latest
 
 ENV TZ=Asia/Shanghai
 
-RUN apk add --no-cache ca-certificates tzdata su-exec && \
+RUN apk add --no-cache ca-certificates tzdata && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
     mkdir -p /app/data
 
 WORKDIR /app
 
-COPY --from=final-builder /build/octopus /app/octopus
+COPY --from=backend-builder /build/octopus /app/octopus
 
 RUN chmod +x /app/octopus
 
