@@ -1,0 +1,20 @@
+  name: Sync Tags from Upstream
+
+  on:
+    workflow_dispatch:  # 手动触发
+    schedule:
+      - cron: '44 5 * * *'  # 每周日自动同步
+
+  jobs:
+    sync:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+
+        - name: Sync tags from upstream
+          run: |
+            git remote add upstream https://github.com/bestruirui/octopus.git
+            git fetch upstream --tags
+            git push origin --tags
