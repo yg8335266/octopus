@@ -1,90 +1,86 @@
-  FROM alpine:3.20 AS version-fetcher
+# Stage 0: Fetch upstream version tag (no .git available on Zeabur)
+FROM alpine:3.20 AS version-fetcher
 
-  RUN apk add --no-cache curl ca-certificates
+RUN apk add --no-cache curl
 
-  ARG UPSTREAM_REPO=bestruirui/octopus
-  ARG GITHUB_TOKEN
+# Copy and execute version fetch script
+COPY scripts/fetch-version.sh /fetch-version.sh
+RUN chmod +x /fetch-version.sh && /fetch-version.sh > /version_tag
 
-  RUN set -eu; \
-      URL="https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest"; \
-      if [ -n "${GITHUB_TOKEN:-}" ]; then \
-          BODY="$(curl -fsSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GITHUB_TOKEN}"
-  "${URL}" || true)"; \
-      else \
-          BODY="$(curl -fsSL -H "Accept: application/vnd.github+json" "${URL}" || true)"; \
-      fi; \
-      TAG="$(printf '%s' "${BODY}" | grep -m1 "\"tag_name\"" | cut -d '"' -f4)"; \
-      if [ -z "${TAG}" ]; then TAG="dev"; fi; \
-      printf '%s' "${TAG}" > /version_tag
+# Stage 1: Build frontend
+FROM node:20-alpine AS frontend-builder
 
-  FROM node:20-alpine3.20 AS frontend-builder
+WORKDIR /build/web
+ENV NEXT_TELEMETRY_DISABLED=1
 
-  WORKDIR /build/web
-  ENV NEXT_TELEMETRY_DISABLED=1
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-  ARG PNPM_VERSION=9.15.4
-  RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+# Copy package files first for better layer caching
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
-  COPY web/package.json web/pnpm-lock.yaml ./
-  RUN pnpm install --frozen-lockfile
+# Copy rest of frontend source
+COPY web/ ./
+COPY --from=version-fetcher /version_tag /tmp/version_tag
 
-  COPY web/ ./
-  COPY --from=version-fetcher /version_tag /tmp/version_tag
+# Build with version from GitHub API
+RUN APP_VERSION=$(cat /tmp/version_tag) && \
+    NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" pnpm run build
 
-  RUN set -eu; \
-      APP_VERSION="$(cat /tmp/version_tag)"; \
-      NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" pnpm run build
+# Stage 2: Build backend
+FROM golang:1.24-alpine AS backend-builder
 
-  FROM golang:1.24-alpine AS backend-builder
+WORKDIR /build
 
-  WORKDIR /build
+# Copy go mod files first for better layer caching
+COPY go.mod go.sum ./
+RUN go mod download
 
-  COPY go.mod go.sum ./
-  RUN go mod download
+# Copy source code
+COPY . .
 
-  COPY . .
-  COPY --from=frontend-builder /build/web/out ./static/out
-  COPY --from=version-fetcher /version_tag /tmp/version_tag
+# Copy frontend build output
+COPY --from=frontend-builder /build/web/out ./static/out
 
-  ARG ZEABUR_GIT_COMMIT_SHA
-  ARG TARGETOS
-  ARG TARGETARCH
+# Copy version tag
+COPY --from=version-fetcher /version_tag /tmp/version_tag
 
-  RUN set -eu; \
-      VERSION="$(cat /tmp/version_tag)"; \
-      COMMIT="unknown"; \
-      if [ -n "${ZEABUR_GIT_COMMIT_SHA:-}" ]; then COMMIT="$(printf '%s' "${ZEABUR_GIT_COMMIT_SHA}" | cut -c1-7)";
-  fi; \
-      BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
-      GOOS="${TARGETOS:-linux}"; \
-      GOARCH="${TARGETARCH:-$(go env GOARCH)}"; \
-      CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" go build \
-        -buildvcs=false \
-        -trimpath \
-        -tags=jsoniter \
-        -ldflags="-s -w -X github.com/bestruirui/octopus/internal/conf.Version=${VERSION} -X
-  github.com/bestruirui/octopus/internal/conf.Commit=${COMMIT} -X
-  github.com/bestruirui/octopus/internal/conf.BuildTime=${BUILD_TIME} -X
-  github.com/bestruirui/octopus/internal/conf.Author=bestrui" \
-        -o /out/octopus .
+# Zeabur provides commit SHA during build
+ARG ZEABUR_GIT_COMMIT_SHA
 
-  FROM alpine:3.20
+# Build binary with version info
+RUN VERSION=$(cat /tmp/version_tag) && \
+    COMMIT="unknown" && \
+    if [ -n "${ZEABUR_GIT_COMMIT_SHA:-}" ]; then COMMIT=$(echo "${ZEABUR_GIT_COMMIT_SHA}" | cut -c1-7); fi && \
+    BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) && \
+    CGO_ENABLED=0 GOOS=linux go build \
+      -trimpath \
+      -tags=jsoniter \
+      -ldflags="-s -w \
+        -X github.com/bestruirui/octopus/internal/conf.Version=${VERSION} \
+        -X github.com/bestruirui/octopus/internal/conf.Commit=${COMMIT} \
+        -X github.com/bestruirui/octopus/internal/conf.BuildTime=${BUILD_TIME} \
+        -X github.com/bestruirui/octopus/internal/conf.Author=bestrui" \
+      -o /octopus .
 
-  ENV TZ=Asia/Shanghai
+# Stage 3: Runtime
+FROM alpine:3.20
 
-  WORKDIR /app
+ENV TZ=Asia/Shanghai
 
-  RUN apk add --no-cache ca-certificates tzdata && \
-      addgroup -S app && adduser -S -G app app && \
-      mkdir -p /app/data && \
-      chown -R app:app /app
+WORKDIR /app
 
-  COPY --from=backend-builder /out/octopus /app/octopus
+RUN apk add --no-cache ca-certificates tzdata && \
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    mkdir -p /app/data
 
-  USER app
+COPY --from=backend-builder /octopus /app/octopus
 
-  EXPOSE 8080
+RUN chmod +x /app/octopus
 
-  VOLUME ["/app/data"]
+EXPOSE 8080
 
-  CMD ["./octopus", "start"]
+VOLUME ["/app/data"]
+
+CMD ["./octopus", "start"]
