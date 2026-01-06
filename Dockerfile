@@ -3,9 +3,13 @@ FROM alpine:3.20 AS version-fetcher
 
 RUN apk add --no-cache curl
 
-# Copy and execute version fetch script
-COPY scripts/fetch-version.sh /fetch-version.sh
-RUN chmod +x /fetch-version.sh && /fetch-version.sh > /version_tag
+ARG UPSTREAM_REPO=bestruirui/octopus
+
+# Fetch version from GitHub API - simple inline script
+RUN TAG=$(curl -fsSL "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest" 2>/dev/null | grep -o '"tag_name"[^,]*' | head -1 | cut -d'"' -f4) && \
+    if [ -z "$TAG" ]; then TAG="dev"; fi && \
+    echo "$TAG" > /version_tag && \
+    echo "Version tag: $(cat /version_tag)"
 
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
@@ -15,15 +19,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy package files first for better layer caching
 COPY web/package.json web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-# Copy rest of frontend source
 COPY web/ ./
 COPY --from=version-fetcher /version_tag /tmp/version_tag
 
-# Build with version from GitHub API
 RUN APP_VERSION=$(cat /tmp/version_tag) && \
     NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" pnpm run build
 
@@ -32,23 +33,15 @@ FROM golang:1.24-alpine AS backend-builder
 
 WORKDIR /build
 
-# Copy go mod files first for better layer caching
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY . .
-
-# Copy frontend build output
 COPY --from=frontend-builder /build/web/out ./static/out
-
-# Copy version tag
 COPY --from=version-fetcher /version_tag /tmp/version_tag
 
-# Zeabur provides commit SHA during build
 ARG ZEABUR_GIT_COMMIT_SHA
 
-# Build binary with version info
 RUN VERSION=$(cat /tmp/version_tag) && \
     COMMIT="unknown" && \
     if [ -n "${ZEABUR_GIT_COMMIT_SHA:-}" ]; then COMMIT=$(echo "${ZEABUR_GIT_COMMIT_SHA}" | cut -c1-7); fi && \
