@@ -8,8 +8,8 @@
 
   # Write the latest release tag to /version_tag (fallback to "dev" if unavailable)
   RUN set -eux; \
-      TAG="$(curl -fsSL "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest" | sed -n
-  's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"; \
+      TAG="$(curl -fsSL https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest | grep '"tag_name"' | head -1
+   | cut -d'"' -f4)"; \
       if [ -z "${TAG}" ]; then TAG="dev"; fi; \
       printf '%s' "${TAG}" > /version_tag
 
