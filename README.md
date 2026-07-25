@@ -14,6 +14,8 @@
 ## ✨ Features
 
 - 🔀 **Multi-Channel Aggregation** - Connect multiple LLM provider channels with unified management
+- 🔑 **Multi-Key Support** - Support multiple API keys for a single channel
+- ⚡ **Smart Selection** - Multiple endpoints per channel, smart selection of the endpoint with the shortest delay
 - ⚖️ **Load Balancing** - Automatic request distribution for stable and efficient service
 - 🔄 **Protocol Conversion** - Seamless conversion between OpenAI Chat / OpenAI Responses / Anthropic API formats
 - 💰 **Price Sync** - Automatic model pricing updates
@@ -168,6 +170,10 @@ All configuration options can be overridden via environment variables using the 
 | `OCTOPUS_LOG_LEVEL` | `log.level` |
 | `OCTOPUS_GITHUB_PAT` | For rate limiting when getting the latest version (optional) |
 | `OCTOPUS_RELAY_MAX_SSE_EVENT_SIZE` | Maximum SSE event size (optional) |
+| `OCTOPUS_IMAGES_BODY_MEMORY_THRESHOLD_MB` | Images request body in-memory threshold. If exceeded, it will be spooled to a temporary file (optional, default 16) |
+| `OCTOPUS_IMAGES_BODY_MAX_MB` | Images request body maximum size. Requests above this limit are rejected (optional, default 256) |
+| `OCTOPUS_IMAGES_BODY_TMP_DIR` | Images request body temporary directory (optional, default `./cache`) |
+| `OCTOPUS_IMAGES_BODY_TMP_CLEANUP_HOURS` | Startup cleanup threshold for temporary files (optional, default 24) |
 
 ## 📸 Screenshots
 
@@ -236,6 +242,7 @@ The program automatically appends API paths based on channel type. You only need
 |--------------|-------------------|----------|--------------------------|
 | OpenAI Chat | `/chat/completions` | `https://api.openai.com/v1` | `https://api.openai.com/v1/chat/completions` |
 | OpenAI Responses | `/responses` | `https://api.openai.com/v1` | `https://api.openai.com/v1/responses` |
+| OpenAI Images | `/images/generations`, `/images/edits`, `/images/variations` | `https://api.openai.com/v1` | `https://api.openai.com/v1/images/generations` |
 | Anthropic | `/messages` | `https://api.anthropic.com/v1` | `https://api.anthropic.com/v1/messages` |
 | Gemini | `/models/:model:generateContent` | `https://generativelanguage.googleapis.com/v1beta` | `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent` |
 
@@ -370,4 +377,4 @@ Edit `~/.codex/auth.json`
 
 - 🙏 [looplj/axonhub](https://github.com/looplj/axonhub) - The LLM API adaptation module in this project is directly derived from this repository
 - 📊 [sst/models.dev](https://github.com/sst/models.dev) - AI model database providing model pricing data
-
+- 🇨🇳 [AtomGit](https://atomgit.com/bestruirui/octopus) - China-based code hosting

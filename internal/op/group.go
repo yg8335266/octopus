@@ -38,12 +38,26 @@ func GroupGet(id int, ctx context.Context) (*model.Group, error) {
 	return &group, nil
 }
 
-func GroupGetMap(name string, ctx context.Context) (model.Group, error) {
-	items, ok := groupMap.Get(name)
+func GroupGetEnabledMap(name string, ctx context.Context) (model.Group, error) {
+	group, ok := groupMap.Get(name)
 	if !ok {
 		return model.Group{}, fmt.Errorf("group not found")
 	}
-	return items, nil
+	if len(group.Items) == 0 {
+		group.Items = nil
+		return group, nil
+	}
+
+	enabledItems := make([]model.GroupItem, 0, len(group.Items))
+	for _, item := range group.Items {
+		channel, ok := channelCache.Get(item.ChannelID)
+		if !ok || !channel.Enabled {
+			continue
+		}
+		enabledItems = append(enabledItems, item)
+	}
+	group.Items = enabledItems
+	return group, nil
 }
 
 func GroupCreate(group *model.Group, ctx context.Context) error {
@@ -69,27 +83,34 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 		}
 	}()
 
-	// 更新 group name (仅在有变更时)
+	var selectFields []string
+	updates := model.Group{ID: req.ID}
+
 	if req.Name != nil {
-		if err := tx.Model(&model.Group{}).Where("id = ?", req.ID).Update("name", *req.Name).Error; err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("failed to update group name: %w", err)
-		}
+		selectFields = append(selectFields, "name")
+		updates.Name = *req.Name
 	}
-
-	// 更新 group mode (仅在有变更时)
 	if req.Mode != nil {
-		if err := tx.Model(&model.Group{}).Where("id = ?", req.ID).Update("mode", *req.Mode).Error; err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("failed to update group mode: %w", err)
-		}
+		selectFields = append(selectFields, "mode")
+		updates.Mode = *req.Mode
+	}
+	if req.MatchRegex != nil {
+		selectFields = append(selectFields, "match_regex")
+		updates.MatchRegex = *req.MatchRegex
+	}
+	if req.FirstTokenTimeOut != nil {
+		selectFields = append(selectFields, "first_token_time_out")
+		updates.FirstTokenTimeOut = *req.FirstTokenTimeOut
+	}
+	if req.SessionKeepTime != nil {
+		selectFields = append(selectFields, "session_keep_time")
+		updates.SessionKeepTime = *req.SessionKeepTime
 	}
 
-	// 更新 match_regex (仅在有变更时)
-	if req.MatchRegex != nil {
-		if err := tx.Model(&model.Group{}).Where("id = ?", req.ID).Update("match_regex", *req.MatchRegex).Error; err != nil {
+	if len(selectFields) > 0 {
+		if err := tx.Model(&model.Group{}).Where("id = ?", req.ID).Select(selectFields).Updates(&updates).Error; err != nil {
 			tx.Rollback()
-			return nil, fmt.Errorf("failed to update group match_regex: %w", err)
+			return nil, fmt.Errorf("failed to update group: %w", err)
 		}
 	}
 

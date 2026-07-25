@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
-import { Check, ChevronDownIcon, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Check, ChevronDownIcon, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { useModelChannelList, type LLMChannel } from '@/api/endpoints/model';
@@ -15,6 +15,8 @@ import type { GroupMode } from '@/api/endpoints/group';
 import type { SelectedMember } from './ItemList';
 import { MemberList } from './ItemList';
 import { matchesGroupName, memberKey, normalizeKey, MODE_LABELS } from './utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
+import { HelpCircle } from 'lucide-react';
 
 
 
@@ -22,6 +24,8 @@ export type GroupEditorValues = {
     name: string;
     match_regex: string;
     mode: GroupMode;
+    first_token_time_out: number;
+    session_keep_time: number;
     members: SelectedMember[];
 };
 
@@ -39,8 +43,10 @@ function ModelPickerSection({
     autoAddDisabled: boolean;
 }) {
     const t = useTranslations('group');
+    const [searchKeyword, setSearchKeyword] = useState('');
 
     const selectedKeys = useMemo(() => new Set(selectedMembers.map(memberKey)), [selectedMembers]);
+    const normalizedSearch = searchKeyword.trim().toLowerCase();
 
     const channels = useMemo(() => {
         const byId = new Map<number, { id: number; name: string; models: LLMChannel[] }>();
@@ -55,21 +61,42 @@ function ModelPickerSection({
             .sort((a, b) => a.id - b.id);
     }, [modelChannels]);
 
+    const filteredChannels = useMemo(() => {
+        if (!normalizedSearch) return channels;
+        return channels.reduce<typeof channels>((acc, channel) => {
+            if (channel.name.toLowerCase().includes(normalizedSearch)) {
+                acc.push(channel);
+                return acc;
+            }
+
+            const models = channel.models.filter((model) => model.name.toLowerCase().includes(normalizedSearch));
+            if (models.length > 0) acc.push({ ...channel, models });
+            return acc;
+        }, []);
+    }, [channels, normalizedSearch]);
+
     return (
-        <div className="rounded-xl border border-border/50 bg-muted/30">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-muted/50">
-                <span className="text-sm font-medium text-foreground">
+        <div className="rounded-xl border border-border/50 bg-muted/30 flex flex-col min-h-0">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-2 border-b border-border/30 bg-muted/50">
+                <span className="min-w-0 justify-self-start text-sm font-medium text-foreground">
                     {t('form.addItem')}
-                    <span className="ml-1.5 text-xs text-muted-foreground font-normal">
-                        ({selectedMembers.length})
-                    </span>
                 </span>
+
+                <div className="relative justify-self-center w-30">
+                    <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        value={searchKeyword}
+                        onChange={(event) => setSearchKeyword(event.target.value)}
+                        className="h-6 rounded-lg border-border/60 bg-background/70 pl-7 pr-2 text-xs shadow-none focus-visible:border-border/60 focus-visible:ring-0"
+                        aria-label="search"
+                    />
+                </div>
 
                 <button
                     type="button"
                     onClick={onAutoAdd}
                     className={cn(
-                        'flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors',
+                        'justify-self-end shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors',
                         autoAddDisabled
                             ? 'text-muted-foreground/50 cursor-not-allowed'
                             : 'hover:bg-muted text-muted-foreground hover:text-foreground'
@@ -82,9 +109,9 @@ function ModelPickerSection({
                 </button>
             </div>
 
-            <div className="h-96 overflow-y-auto p-2">
+            <div className="flex-1 min-h-0 overflow-y-auto p-2">
                 <Accordion type="multiple" className="w-full space-y-2">
-                    {channels.map((channel) => {
+                    {filteredChannels.map((channel) => {
                         const total = channel.models.length;
                         const selectedCount = channel.models.reduce(
                             (acc, m) => acc + (selectedKeys.has(memberKey(m)) ? 1 : 0),
@@ -165,7 +192,7 @@ function SortSection({
     const t = useTranslations('group');
 
     return (
-        <div className="rounded-xl border border-border/50 bg-muted/30">
+        <div className="rounded-xl border border-border/50 bg-muted/30 flex flex-col min-h-0">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-muted/50">
                 <span className="text-sm font-medium text-foreground">
                     {t('form.items')}
@@ -192,15 +219,17 @@ function SortSection({
                 </button>
             </div>
 
-            <MemberList
-                members={members}
-                onReorder={onReorder}
-                onRemove={onRemove}
-                onWeightChange={onWeightChange}
-                removingIds={removingIds}
-                showWeight={showWeight}
-                showConfirmDelete={false}
-            />
+            <div className="flex-1 min-h-0">
+                <MemberList
+                    members={members}
+                    onReorder={onReorder}
+                    onRemove={onRemove}
+                    onWeightChange={onWeightChange}
+                    removingIds={removingIds}
+                    showWeight={showWeight}
+                    showConfirmDelete={false}
+                />
+            </div>
         </div>
     );
 }
@@ -226,6 +255,8 @@ export function GroupEditor({
     const [groupName, setGroupName] = useState(initial?.name ?? '');
     const [matchRegex, setMatchRegex] = useState(initial?.match_regex ?? '');
     const [mode, setMode] = useState<GroupMode>((initial?.mode ?? 1) as GroupMode);
+    const [firstTokenTimeOut, setFirstTokenTimeOut] = useState<number>(initial?.first_token_time_out ?? 0);
+    const [sessionKeepTime, setSessionKeepTime] = useState<number>(initial?.session_keep_time ?? 0);
     const [selectedMembers, setSelectedMembers] = useState<SelectedMember[]>(initial?.members ?? []);
     const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
 
@@ -233,9 +264,20 @@ export function GroupEditor({
     const regexKey = matchRegex.trim();
 
     const { matchedModelChannels, regexError } = useMemo(() => {
+        const parseRegex = (input: string): RegExp => {
+            const inlineMatch = input.match(/^\(\?([ism]+)\)(.+)$/);
+            if (inlineMatch) {
+                const flagMap: Record<string, string> = { i: 'i', s: 's', m: 'm' };
+                const flags = inlineMatch[1].split('').map(f => flagMap[f] || '').join('');
+                return new RegExp(inlineMatch[2], flags);
+            }
+
+            return new RegExp(input);
+        };
+
         if (regexKey) {
             try {
-                const re = new RegExp(regexKey);
+                const re = parseRegex(regexKey);
                 return { matchedModelChannels: modelChannels.filter((mc) => re.test(mc.name)), regexError: '' };
             } catch (e) {
                 return { matchedModelChannels: [], regexError: (e as Error)?.message ?? 'Invalid regex' };
@@ -296,77 +338,153 @@ export function GroupEditor({
             name: groupName,
             match_regex: regexKey,
             mode,
+            first_token_time_out: firstTokenTimeOut,
+            session_keep_time: sessionKeepTime,
             members: selectedMembers,
         });
     };
 
 
     return (
-        <form onSubmit={handleSubmit}>
-            <FieldGroup className="gap-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Field>
-                        <FieldLabel htmlFor="group-name">{t('form.name')}</FieldLabel>
-                        <Input
-                            id="group-name"
-                            value={groupName}
-                            onChange={(e) => setGroupName(e.target.value)}
-                            className="rounded-xl"
-                        />
-                    </Field>
-                    <Field>
-                        <FieldLabel htmlFor="group-match-regex">{t('form.matchRegex')}</FieldLabel>
-                        <Input
-                            id="group-match-regex"
-                            value={matchRegex}
-                            onChange={(e) => setMatchRegex(e.target.value)}
-                            className="rounded-xl"
-                            placeholder={t('form.matchRegexPlaceholder')}
-                        />
-                        {regexError && (
-                            <p className="mt-1 text-xs text-destructive">
-                                {t('form.matchRegexInvalid')}: {regexError}
-                            </p>
-                        )}
-                    </Field>
-                </div>
-
-                {/* Mode */}
-                <div className="flex gap-1">
-                    {([1, 2, 3, 4] as const).map((m) => (
-                        <button
-                            key={m}
-                            type="button"
-                            onClick={() => setMode(m)}
-                            className={cn(
-                                'flex-1 py-1 text-xs rounded-lg transition-colors',
-                                mode === m ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
+        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0 ">
+            <div className="flex-1 min-h-0 overflow-hidden pr-1">
+                <FieldGroup className="gap-4 flex flex-col min-h-0 h-full">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Field>
+                            <FieldLabel htmlFor="group-name">{t('form.name')}</FieldLabel>
+                            <Input
+                                id="group-name"
+                                value={groupName}
+                                onChange={(e) => setGroupName(e.target.value)}
+                                className="rounded-xl"
+                            />
+                        </Field>
+                        <Field>
+                            <FieldLabel htmlFor="group-match-regex">{t('form.matchRegex')}</FieldLabel>
+                            <Input
+                                id="group-match-regex"
+                                value={matchRegex}
+                                onChange={(e) => setMatchRegex(e.target.value)}
+                                className="rounded-xl"
+                                placeholder={t('form.matchRegexPlaceholder')}
+                            />
+                            {regexError && (
+                                <p className="mt-1 text-xs text-destructive">
+                                    {t('form.matchRegexInvalid')}: {regexError}
+                                </p>
                             )}
-                        >
-                            {t(`mode.${MODE_LABELS[m]}`)}
-                        </button>
-                    ))}
-                </div>
+                        </Field>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ModelPickerSection
-                        modelChannels={modelChannels}
-                        selectedMembers={selectedMembers}
-                        onAdd={handleAddMember}
-                        onAutoAdd={handleAutoAdd}
-                        autoAddDisabled={autoAddDisabled}
-                    />
-                    <SortSection
-                        members={selectedMembers}
-                        onReorder={setSelectedMembers}
-                        onRemove={handleRemoveMember}
-                        onWeightChange={handleWeightChange}
-                        removingIds={removingIds}
-                        showWeight={mode === 4}
-                        onClear={handleClearMembers}
-                    />
-                </div>
+                        <Field>
+                            <FieldLabel htmlFor="group-first-token-time-out">
+                                {t('form.firstTokenTimeOut')}
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <HelpCircle className="size-4 text-muted-foreground cursor-help" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            {t('form.firstTokenTimeOutHint')}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </FieldLabel>
+                            <Input
+                                id="group-first-token-time-out"
+                                type="number"
+                                inputMode="numeric"
+                                min={0}
+                                step={1}
+                                value={String(firstTokenTimeOut)}
+                                onChange={(e) => {
+                                    const raw = e.target.value;
+                                    if (raw.trim() === '') {
+                                        setFirstTokenTimeOut(0);
+                                        return;
+                                    }
+                                    const n = Number.parseInt(raw, 10);
+                                    setFirstTokenTimeOut(Number.isFinite(n) && n > 0 ? n : 0);
+                                }}
+                                className="rounded-xl"
+                            />
+                        </Field>
 
+                        <Field>
+                            <FieldLabel htmlFor="group-session-keep-time">
+                                {t('form.sessionKeepTime')}
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <HelpCircle className="size-4 text-muted-foreground cursor-help" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            {t('form.sessionKeepTimeHint')}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </FieldLabel>
+                            <Input
+                                id="group-session-keep-time"
+                                type="number"
+                                inputMode="numeric"
+                                min={0}
+                                step={1}
+                                value={String(sessionKeepTime)}
+                                onChange={(e) => {
+                                    const raw = e.target.value;
+                                    if (raw.trim() === '') {
+                                        setSessionKeepTime(0);
+                                        return;
+                                    }
+                                    const n = Number.parseInt(raw, 10);
+                                    setSessionKeepTime(Number.isFinite(n) && n > 0 ? n : 0);
+                                }}
+                                className="rounded-xl"
+                            />
+                        </Field>
+                    </div>
+
+                    {/* Mode */}
+                    <div className="flex gap-1">
+                        {([1, 2, 3, 4] as const).map((m) => (
+                            <button
+                                key={m}
+                                type="button"
+                                onClick={() => setMode(m)}
+                                className={cn(
+                                    'flex-1 py-1 text-xs rounded-lg transition-colors',
+                                    mode === m ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
+                                )}
+                            >
+                                {t(`mode.${MODE_LABELS[m]}`)}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex-1 min-h-0">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full min-h-0">
+                            <ModelPickerSection
+                                modelChannels={modelChannels}
+                                selectedMembers={selectedMembers}
+                                onAdd={handleAddMember}
+                                onAutoAdd={handleAutoAdd}
+                                autoAddDisabled={autoAddDisabled}
+                            />
+                            <SortSection
+                                members={selectedMembers}
+                                onReorder={setSelectedMembers}
+                                onRemove={handleRemoveMember}
+                                onWeightChange={handleWeightChange}
+                                removingIds={removingIds}
+                                showWeight={mode === 4}
+                                onClear={handleClearMembers}
+                            />
+                        </div>
+                    </div>
+                </FieldGroup>
+            </div>
+
+            <div className="pt-4 mt-auto shrink-0">
                 <div className="flex gap-2">
                     {onCancel && (
                         <Button type="button" variant="secondary" className="flex-1 rounded-xl h-11" onClick={onCancel}>
@@ -381,9 +499,7 @@ export function GroupEditor({
                         {isSubmitting ? submittingText : submitText}
                     </Button>
                 </div>
-            </FieldGroup>
+            </div>
         </form>
     );
 }
-
-

@@ -38,7 +38,7 @@ func UpdateLLMPrice(ctx context.Context) error {
 	defer func() {
 		log.Debugf("update LLM price task finished, update time: %s", time.Since(startTime))
 	}()
-	client, err := client.NewHTTPClient(false)
+	client, err := client.GetHTTPClientSystemProxy(false)
 	if err != nil {
 		return err
 	}
@@ -46,6 +46,7 @@ func UpdateLLMPrice(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -84,6 +85,7 @@ func GetLastUpdateTime() time.Time {
 }
 
 func GetLLMPrice(modelName string) *model.LLMPrice {
+	modelName = strings.ToLower(modelName)
 	price, err := op.LLMGet(modelName)
 	if err == nil {
 		return &price

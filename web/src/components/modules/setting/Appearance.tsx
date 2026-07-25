@@ -12,7 +12,7 @@ export function SettingAppearance() {
     const { locale, setLocale } = useSettingStore();
 
     return (
-        <div className="rounded-3xl border border-border bg-card p-6 custom-shadow space-y-5">
+        <div className="rounded-3xl border border-border bg-card p-6 space-y-5">
             <h2 className="text-lg font-bold text-card-foreground flex items-center gap-2">
                 <Sun className="h-5 w-5" />
                 {t('appearance')}
@@ -56,7 +56,8 @@ export function SettingAppearance() {
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
-                        <SelectItem value="zh" className="rounded-xl">{t('language.zh')}</SelectItem>
+                        <SelectItem value="zh_hans" className="rounded-xl">{t('language.zh_hans')}</SelectItem>
+                        <SelectItem value="zh_hant" className="rounded-xl">{t('language.zh_hant')}</SelectItem>
                         <SelectItem value="en" className="rounded-xl">{t('language.en')}</SelectItem>
                     </SelectContent>
                 </Select>

@@ -52,6 +52,39 @@
         "log": "Log",
         "setting": "Setting"
     },
+    "toolbar": {
+        "popover": {
+            "ariaLabel": "View options",
+            "layout": "Layout",
+            "sort": "Sort",
+            "grid": "Grid",
+            "list": "List",
+            "nameAsc": "Name Asc",
+            "nameDesc": "Name Desc",
+            "createdAsc": "Time Asc",
+            "createdDesc": "Time Desc",
+            "asc": "Asc",
+            "desc": "Desc",
+            "filter": {
+                "title": "Filter",
+                "channel": {
+                    "all": "All channels",
+                    "enabled": "Enabled only",
+                    "disabled": "Disabled only"
+                },
+                "group": {
+                    "all": "All groups",
+                    "withMembers": "With members",
+                    "empty": "Empty groups"
+                },
+                "model": {
+                    "all": "All models",
+                    "priced": "Priced only",
+                    "free": "Free only"
+                }
+            }
+        }
+    },
     "common": {
         "copy": {
             "success": "Copied",
@@ -82,9 +115,16 @@
             "outputCost": "Output Cost"
         },
         "chart": {
+            "title": "Trend",
             "totalRequests": "Total Requests",
             "totalCost": "Total Cost",
+            "totalTokens": "Total Tokens",
             "timePeriod": "Time Period",
+            "metricType": {
+                "cost": "Cost",
+                "count": "Count",
+                "tokens": "Tokens"
+            },
             "period": {
                 "today": "Today",
                 "last7Days": "7 Days",
@@ -95,7 +135,9 @@
             "title": "Ranking",
             "sortByCost": "Cost",
             "sortByCount": "Count",
-            "noData": "No ranking data"
+            "sortByTokens": "Tokens",
+            "noData": "No ranking data",
+            "successRate": "Success Rate"
         }
     },
     "setting": {
@@ -109,7 +151,8 @@
         },
         "language": {
             "label": "Language",
-            "zh": "中文",
+            "zh_hans": "Chinese (Simplified)",
+            "zh_hant": "Chinese (Traditional)",
             "en": "English"
         },
         "proxyUrl": {
@@ -124,6 +167,22 @@
             "label": "CORS Allowed Origins",
             "hint": "Empty = deny all, * = allow all",
             "example": "Only allow specific domains: https://example.com,https://example2.com"
+        },
+        "circuitBreaker": {
+            "title": "Circuit Breaker",
+            "threshold": {
+                "label": "Failure Threshold (consecutive failures)",
+                "placeholder": "Enter threshold"
+            },
+            "cooldown": {
+                "label": "Base Cooldown (seconds)",
+                "placeholder": "Enter cooldown in seconds"
+            },
+            "maxCooldown": {
+                "label": "Max Cooldown (seconds)",
+                "placeholder": "Enter max cooldown in seconds"
+            },
+            "hint": "When a channel fails consecutively up to the threshold, circuit breaker trips. Cooldown grows exponentially up to the max cooldown"
         },
         "saved": "Saved",
         "backup": {
@@ -312,6 +371,10 @@
             "matchRegex": "Match Regex",
             "matchRegexPlaceholder": "Leave empty to use default fuzzy match by group name",
             "matchRegexInvalid": "Invalid regex",
+            "firstTokenTimeOut": "First Token Timeout",
+            "firstTokenTimeOutHint": "Unit: seconds, only effective for streaming response, 0 = no limit",
+            "sessionKeepTime": "Session Keep Time",
+            "sessionKeepTimeHint": "Unit: seconds, keeps using the same channel within a session, 0 = disabled",
             "items": "Selected Models",
             "addItem": "Add Model",
             "autoAdd": "Auto Add",
@@ -378,7 +441,11 @@
             "noRequestContent": "(No request content)",
             "noResponseContent": "(No response content)",
             "firstTokenTime": "First Token Time",
-            "tokens": "tokens"
+            "tokens": "tokens",
+            "retryDetails": "Retry Details",
+            "attempts": "attempts",
+            "success": "Success",
+            "failed": "Failed"
         }
     },
     "channel": {
@@ -398,8 +465,12 @@
             "sections": {
                 "requests": "Request Details",
                 "tokens": "Token Usage",
-                "costs": "Cost Details"
+                "costs": "Cost Details",
+                "baseUrls": "Base URLs",
+                "keys": "Keys"
             },
+            "noBaseUrls": "No Base URLs",
+            "noKeys": "No Keys",
             "metrics": {
                 "totalRequests": "Total Requests",
                 "totalToken": "Total Tokens",
@@ -410,7 +481,7 @@
                 "outputToken": "Output Tokens",
                 "inputCost": "Input Cost",
                 "outputCost": "Output Cost",
-                "avgWaitTime": "Avg Wait Time"
+                "avgWaitTime": "Wait Time"
             },
             "actions": {
                 "edit": "Edit",
@@ -428,15 +499,26 @@
             "submitting": "Creating..."
         },
         "form": {
+            "add": "Add",
             "name": "Channel Name",
             "type": "Channel Type",
-            "baseUrl": "Base URL",
+            "baseUrls": "Base URLs",
+            "baseUrlUrl": "URL",
+            "baseUrlDelay": "Delay(ms)",
+            "advanced": "Advanced Settings",
             "apiKey": "API Key",
+            "customHeader": "Custom Headers",
+            "customHeaderKey": "Header Key",
+            "customHeaderValue": "Header Value",
+            "customHeaderAdd": "Add Header",
+            "channelProxy": "Channel Proxy",
+            "channelProxyPlaceholder": "Optional: proxy for this channel (overrides global proxy)",
+            "paramOverride": "Param Override",
+            "paramOverridePlaceholder": "Optional: JSON string to override request params",
             "model": "Model",
             "enabled": "Enabled",
             "proxy": "Use Proxy",
             "modelCustomPlaceholder": "Custom model name",
-            "modelSearchPlaceholder": "Search or add custom model",
             "modelAdd": "Add",
             "modelRefresh": "Refresh",
             "modelRefreshSuccess": "Models fetched successfully",
@@ -444,16 +526,10 @@
             "modelRefreshEmpty": "No models found",
             "modelSelected": "Selected Models",
             "modelNoSelected": "No models selected",
-            "modelAvailable": "Available Models",
-            "modelSelectAll": "Select All",
             "modelClearAll": "Clear All",
-            "modelAllAdded": "All models added",
-            "modelNoMatch": "No matching models.",
-            "modelAddCustom": "Add as custom",
-            "modelFetching": "Fetching models...",
-            "modelFetchPrompt": "Click to fetch available models",
             "typeOpenAIChat": "OpenAI Chat",
             "typeOpenAIResponse": "OpenAI Response",
+            "typeOpenAIEmbedding": "OpenAI Embedding",
             "typeAnthropic": "Anthropic",
             "typeGemini": "Gemini",
             "typeVolcengine": "Volcengine",
@@ -462,7 +538,10 @@
             "autoGroupNone": "None",
             "autoGroupFuzzy": "Fuzzy",
             "autoGroupExact": "Exact",
-            "autoGroupRegex": "Regex"
+            "autoGroupRegex": "Regex",
+            "matchRegex": "Match Regex",
+            "matchRegexPlaceholder": "Optional: regex pattern to match request model names",
+            "remark": "Remark"
         }
     }
 }
