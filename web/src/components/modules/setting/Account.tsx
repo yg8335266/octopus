@@ -1,12 +1,10 @@
-'use client';
-
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations } from 'use-intl';
 import { User, KeyRound, Lock, Eye, EyeOff } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useChangeUsername, useChangePassword, useAuth } from '@/api/endpoints/user';
-import { toast } from '@/components/common/Toast';
+import { useChangeUsername, useChangePassword, useAuth } from '@/api/user';
+import { toast } from 'sonner';
 
 export function SettingAccount() {
     const t = useTranslations('setting');
@@ -174,4 +172,3 @@ export function SettingAccount() {
         </div>
     );
 }
-

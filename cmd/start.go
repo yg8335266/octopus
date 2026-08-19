@@ -6,8 +6,8 @@ import (
 	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/server"
 	"github.com/bestruirui/octopus/internal/task"
-	"github.com/bestruirui/octopus/internal/utils/log"
 	"github.com/bestruirui/octopus/internal/utils/shutdown"
+	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 )
 
@@ -19,11 +19,12 @@ var startCmd = &cobra.Command{
 	PreRun: func(cmd *cobra.Command, args []string) {
 		conf.PrintBanner()
 		conf.Load(cfgFile)
-		log.SetLevel(conf.AppConfig.Log.Level)
+		if level, err := log.ParseLevel(conf.AppConfig.Log.Level); err == nil {
+			log.SetLevel(level)
+		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		shutdown.Init(log.Logger)
-		defer shutdown.Listen()
+		shutdown.Init(log.Default())
 		if err := db.InitDB(conf.AppConfig.Database.Type, conf.AppConfig.Database.Path, conf.IsDebug()); err != nil {
 			log.Errorf("database init error: %v", err)
 			return
@@ -49,6 +50,7 @@ var startCmd = &cobra.Command{
 
 		task.Init()
 		go task.RUN()
+		shutdown.Listen()
 	},
 }
 

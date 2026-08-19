@@ -15,7 +15,7 @@ import (
 
 	"github.com/bestruirui/octopus/internal/client"
 	"github.com/bestruirui/octopus/internal/conf"
-	"github.com/bestruirui/octopus/internal/utils/log"
+	"github.com/charmbracelet/log"
 )
 
 const (

@@ -4,19 +4,18 @@ import {
     MorphingDialogContainer,
     MorphingDialogContent,
 } from '@/components/ui/morphing-dialog';
-import { CheckCircle2, DollarSign, Key, Layers, MessageSquare, XCircle } from 'lucide-react';
-import { type StatsMetricsFormatted } from '@/api/endpoints/stats';
-import { type Channel, useEnableChannel } from '@/api/endpoints/channel';
+import { CheckCircle2, DollarSign, Layers, MessageSquare, XCircle } from 'lucide-react';
+import { type StatsMetricsFormatted } from '@/api/stats';
+import { type Channel, useEnableChannel } from '@/api/channel';
 import { CardContent } from './CardContent';
-import { useTranslations } from 'next-intl';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/animate-ui/components/animate/tooltip';
+import { useTranslations } from 'use-intl';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
-import { toast } from '@/components/common/Toast';
+import { toast } from 'sonner';
 
 export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; stats: StatsMetricsFormatted; layout?: 'grid' | 'list' }) {
     const t = useTranslations('channel.card');
     const tForm = useTranslations('channel.form');
-    const tSections = useTranslations('channel.detail.sections');
     const tMetrics = useTranslations('channel.detail.metrics');
     const enableChannel = useEnableChannel();
     const isListLayout = layout === 'list';
@@ -31,7 +30,6 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
         ...splitModels(channel.model),
         ...splitModels(channel.custom_model),
     ]).size;
-    const enabledKeyCount = channel.keys.filter((item) => item.enabled).length;
 
     const handleEnableChange = (checked: boolean) => {
         enableChannel.mutate(
@@ -50,13 +48,15 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
     return (
         <MorphingDialog>
             <MorphingDialogTrigger className="w-full">
-                <article className="flex flex-col gap-4 rounded-3xl border border-border bg-card text-card-foreground p-4 transition-all duration-300">
+                <article className="flex flex-col gap-4 rounded-3xl border border-border bg-card text-card-foreground p-4">
                     <header className="relative flex items-center justify-between gap-2">
-                        <Tooltip side="top" sideOffset={10} align="center">
+                        <Tooltip>
                             <TooltipTrigger asChild>
                                 <h3 className="text-lg font-bold truncate min-w-0">{channel.name}</h3>
                             </TooltipTrigger>
-                            <TooltipContent key={channel.name}>{channel.name}</TooltipContent>
+                            <TooltipContent key={channel.name} side="top" sideOffset={10} align="center">
+                                {channel.name}
+                            </TooltipContent>
                         </Tooltip>
                         <Switch
                             checked={channel.enabled}
@@ -67,7 +67,7 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
                     </header>
 
                     {isListLayout ? (
-                        <dl className="grid grid-cols-2 gap-2 lg:grid-cols-6">
+                        <dl className="grid grid-cols-2 gap-2 lg:grid-cols-5">
                             <div className="rounded-2xl border border-border/70 bg-background/80 p-2">
                                 <dt className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
                                     <MessageSquare className="size-3.5 text-primary" />
@@ -84,13 +84,6 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
                                     {tForm('model')}
                                 </dt>
                                 <dd className="text-sm font-semibold">{modelCount}</dd>
-                            </div>
-                            <div className="rounded-2xl border border-border/70 bg-background/80 p-2">
-                                <dt className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-                                    <Key className="size-3.5 text-primary" />
-                                    {tSections('keys')}
-                                </dt>
-                                <dd className="text-sm font-semibold">{enabledKeyCount}/{channel.keys.length}</dd>
                             </div>
                             <div className="rounded-2xl border border-border/70 bg-background/80 p-2">
                                 <dt className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">

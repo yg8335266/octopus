@@ -88,8 +88,6 @@ func createChannel(c *gin.Context) {
 		modelStr := channel.Model + "," + channel.CustomModel
 		modelArray := strings.Split(modelStr, ",")
 		helper.LLMPriceAddToDB(modelArray, ctx)
-		helper.ChannelBaseUrlDelayUpdate(channel, ctx)
-		helper.ChannelAutoGroup(channel, ctx)
 	}(&channel)
 	resp.Success(c, channel)
 }
@@ -113,8 +111,6 @@ func updateChannel(c *gin.Context) {
 		modelStr := channel.Model + "," + channel.CustomModel
 		modelArray := strings.Split(modelStr, ",")
 		helper.LLMPriceAddToDB(modelArray, ctx)
-		helper.ChannelBaseUrlDelayUpdate(channel, ctx)
-		helper.ChannelAutoGroup(channel, ctx)
 	}(channel)
 	resp.Success(c, channel)
 }

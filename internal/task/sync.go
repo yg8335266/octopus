@@ -9,8 +9,8 @@ import (
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/utils/diff"
-	"github.com/bestruirui/octopus/internal/utils/log"
 	"github.com/bestruirui/octopus/internal/utils/xstrings"
+	"github.com/charmbracelet/log"
 )
 
 var lastSyncModelsTime = time.Now()
@@ -75,11 +75,6 @@ func SyncModelsTask() {
 			if err := op.GroupItemBatchDelByChannelAndModels(keys, ctx); err != nil {
 				log.Errorf("failed to batch delete group items for channel %s: %v", channel.Name, err)
 			}
-		}
-
-		// 自动分组
-		if len(newModels) > 0 {
-			helper.ChannelAutoGroup(&channel, ctx)
 		}
 	}
 	llmPrice, err := op.LLMList(ctx)

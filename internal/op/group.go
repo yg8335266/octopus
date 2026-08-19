@@ -3,6 +3,7 @@ package op
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/bestruirui/octopus/internal/db"
 	"github.com/bestruirui/octopus/internal/model"
@@ -13,6 +14,11 @@ import (
 
 var groupCache = cache.New[int, model.Group](16)
 var groupMap = cache.New[string, model.Group](16)
+
+var (
+	groupActiveItemMu      sync.Mutex       // groupActiveItemMu 保护活动项变更通知通道。
+	groupActiveItemChanged = make(chan struct{}) // groupActiveItemChanged 在任一分组活动项变化时广播通知。
+)
 
 func GroupList(ctx context.Context) ([]model.Group, error) {
 	groups := make([]model.Group, 0, groupCache.Len())
@@ -38,29 +44,20 @@ func GroupGet(id int, ctx context.Context) (*model.Group, error) {
 	return &group, nil
 }
 
-func GroupGetEnabledMap(name string, ctx context.Context) (model.Group, error) {
+// GroupGetByName 返回客户端模型名称对应的完整分组配置。
+func GroupGetByName(name string, ctx context.Context) (model.Group, error) {
 	group, ok := groupMap.Get(name)
 	if !ok {
 		return model.Group{}, fmt.Errorf("group not found")
 	}
-	if len(group.Items) == 0 {
-		group.Items = nil
-		return group, nil
-	}
-
-	enabledItems := make([]model.GroupItem, 0, len(group.Items))
-	for _, item := range group.Items {
-		channel, ok := channelCache.Get(item.ChannelID)
-		if !ok || !channel.Enabled {
-			continue
-		}
-		enabledItems = append(enabledItems, item)
-	}
-	group.Items = enabledItems
 	return group, nil
 }
 
+// GroupCreate 创建分组并刷新名称和主键缓存。
 func GroupCreate(group *model.Group, ctx context.Context) error {
+	if group.RetryInterval < 1 {
+		group.RetryInterval = 1
+	}
 	if err := db.GetDB().WithContext(ctx).Create(group).Error; err != nil {
 		return err
 	}
@@ -69,6 +66,7 @@ func GroupCreate(group *model.Group, ctx context.Context) error {
 	return nil
 }
 
+// GroupUpdate 更新分组配置和成员，并返回刷新后的分组。
 func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Group, error) {
 	oldGroup, ok := groupCache.Get(req.ID)
 	if !ok {
@@ -90,21 +88,9 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 		selectFields = append(selectFields, "name")
 		updates.Name = *req.Name
 	}
-	if req.Mode != nil {
-		selectFields = append(selectFields, "mode")
-		updates.Mode = *req.Mode
-	}
-	if req.MatchRegex != nil {
-		selectFields = append(selectFields, "match_regex")
-		updates.MatchRegex = *req.MatchRegex
-	}
-	if req.FirstTokenTimeOut != nil {
-		selectFields = append(selectFields, "first_token_time_out")
-		updates.FirstTokenTimeOut = *req.FirstTokenTimeOut
-	}
-	if req.SessionKeepTime != nil {
-		selectFields = append(selectFields, "session_keep_time")
-		updates.SessionKeepTime = *req.SessionKeepTime
+	if req.RetryInterval != nil {
+		selectFields = append(selectFields, "retry_interval")
+		updates.RetryInterval = *req.RetryInterval
 	}
 
 	if len(selectFields) > 0 {
@@ -116,6 +102,15 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 
 	// 删除 items
 	if len(req.ItemsToDelete) > 0 {
+		for _, itemID := range req.ItemsToDelete {
+			if itemID == oldGroup.ActiveItemID {
+				if err := tx.Model(&model.Group{}).Where("id = ?", req.ID).Update("active_item_id", 0).Error; err != nil {
+					tx.Rollback()
+					return nil, fmt.Errorf("failed to clear active item: %w", err)
+				}
+				break
+			}
+		}
 		if err := tx.Where("id IN ? AND group_id = ?", req.ItemsToDelete, req.ID).Delete(&model.GroupItem{}).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to delete items: %w", err)
@@ -126,20 +121,16 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 	if len(req.ItemsToUpdate) > 0 {
 		ids := make([]int, len(req.ItemsToUpdate))
 		priorityCase := "CASE id"
-		weightCase := "CASE id"
 		for i, item := range req.ItemsToUpdate {
 			ids[i] = item.ID
 			priorityCase += fmt.Sprintf(" WHEN %d THEN %d", item.ID, item.Priority)
-			weightCase += fmt.Sprintf(" WHEN %d THEN %d", item.ID, item.Weight)
 		}
 		priorityCase += " END"
-		weightCase += " END"
 
 		if err := tx.Model(&model.GroupItem{}).
 			Where("id IN ? AND group_id = ?", ids, req.ID).
 			Updates(map[string]interface{}{
 				"priority": gorm.Expr(priorityCase),
-				"weight":   gorm.Expr(weightCase),
 			}).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update items: %w", err)
@@ -155,7 +146,6 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 				ChannelID: item.ChannelID,
 				ModelName: item.ModelName,
 				Priority:  item.Priority,
-				Weight:    item.Weight,
 			}
 		}
 		if err := tx.Create(&newItems).Error; err != nil {
@@ -178,6 +168,51 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 		groupMap.Del(oldName)
 	}
 	return &group, nil
+}
+
+// GroupActiveItemChangeSignal 返回下一次分组活动项变化时关闭的通知通道。
+func GroupActiveItemChangeSignal() <-chan struct{} {
+	groupActiveItemMu.Lock()
+	defer groupActiveItemMu.Unlock()
+	return groupActiveItemChanged
+}
+
+// notifyGroupActiveItemChanged 唤醒等待活动项变化的请求。
+func notifyGroupActiveItemChanged() {
+	groupActiveItemMu.Lock()
+	close(groupActiveItemChanged)
+	groupActiveItemChanged = make(chan struct{})
+	groupActiveItemMu.Unlock()
+}
+
+// GroupActiveItemUpdate 更新或清空分组当前手动指定的渠道模型。
+func GroupActiveItemUpdate(groupID int, req *model.GroupActiveItemUpdateRequest, ctx context.Context) (*model.Group, error) {
+	group, ok := groupCache.Get(groupID)
+	if !ok {
+		return nil, fmt.Errorf("group not found")
+	}
+	itemID := *req.ItemID
+	if itemID != 0 {
+		found := false
+		for _, item := range group.Items {
+			if item.ID == itemID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("group item not found")
+		}
+	}
+	if err := db.GetDB().WithContext(ctx).Model(&model.Group{}).Where("id = ?", groupID).Update("active_item_id", itemID).Error; err != nil {
+		return nil, fmt.Errorf("failed to update active item: %w", err)
+	}
+	if err := groupRefreshCacheByID(groupID, ctx); err != nil {
+		return nil, err
+	}
+	notifyGroupActiveItemChanged()
+	updated, _ := groupCache.Get(groupID)
+	return &updated, nil
 }
 
 func GroupDel(id int, ctx context.Context) error {
@@ -265,7 +300,6 @@ func GroupItemBatchAdd(groupID int, items []model.GroupIDAndLLMName, ctx context
 			ChannelID: it.ChannelID,
 			ModelName: it.ModelName,
 			Priority:  nextPriority,
-			Weight:    1,
 		})
 		nextPriority++
 	}
@@ -284,7 +318,7 @@ func GroupItemBatchAdd(groupID int, items []model.GroupIDAndLLMName, ctx context
 
 func GroupItemUpdate(item *model.GroupItem, ctx context.Context) error {
 	if err := db.GetDB().WithContext(ctx).Model(item).
-		Select("ModelName", "Priority", "Weight").
+		Select("ModelName", "Priority").
 		Updates(item).Error; err != nil {
 		return err
 	}

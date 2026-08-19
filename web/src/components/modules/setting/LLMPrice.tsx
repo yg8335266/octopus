@@ -1,13 +1,11 @@
-'use client';
-
 import { useEffect, useState, useRef } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations } from 'use-intl';
 import { DollarSign, Clock, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useSettingList, useSetSetting, SettingKey } from '@/api/endpoints/setting';
-import { useUpdateModelPrice, useLastUpdateTime } from '@/api/endpoints/model';
-import { toast } from '@/components/common/Toast';
+import { useSettingList, useSetSetting, SettingKey } from '@/api/setting';
+import { useUpdateModelPrice, useLastUpdateTime } from '@/api/model';
+import { toast } from 'sonner';
 
 export function SettingLLMPrice() {
     const t = useTranslations('setting');
@@ -105,4 +103,3 @@ export function SettingLLMPrice() {
         </div>
     );
 }
-

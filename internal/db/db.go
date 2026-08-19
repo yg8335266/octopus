@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -54,7 +55,6 @@ func InitDB(dbType, dsn string, debug bool) error {
 	if err := db.AutoMigrate(
 		&model.User{},
 		&model.Channel{},
-		&model.ChannelKey{},
 		&model.Group{},
 		&model.GroupItem{},
 		&model.LLMInfo{},
@@ -66,7 +66,6 @@ func InitDB(dbType, dsn string, debug bool) error {
 		&model.StatsModel{},
 		&model.StatsChannel{},
 		&model.StatsAPIKey{},
-		&model.RelayLog{},
 		&migrate.MigrationRecord{},
 	); err != nil {
 		return err
@@ -83,18 +82,18 @@ func InitDB(dbType, dsn string, debug bool) error {
 	return nil
 }
 
+// initSQLite 使用指定文件路径初始化 SQLite，并为每个连接应用运行参数。
 func initSQLite(path string, config *gorm.Config) (*gorm.DB, error) {
-	params := []string{
-		"_journal_mode=WAL",
-		"_synchronous=NORMAL",
-		"_cache_size=10000",
-		"_busy_timeout=5000",
-		"_foreign_keys=ON",
-		"_auto_vacuum=INCREMENTAL",
-		"_mmap_size=268435456",
-		"_locking_mode=NORMAL",
-	}
-	return gorm.Open(sqlite.Open(path+"?"+strings.Join(params, "&")), config)
+	params := url.Values{}
+	params.Add("_pragma", "journal_mode(WAL)")
+	params.Add("_pragma", "synchronous(NORMAL)")
+	params.Add("_pragma", "cache_size(10000)")
+	params.Add("_pragma", "busy_timeout(5000)")
+	params.Add("_pragma", "foreign_keys(ON)")
+	params.Add("_pragma", "auto_vacuum(INCREMENTAL)")
+	params.Add("_pragma", "mmap_size(268435456)")
+	params.Add("_pragma", "locking_mode(NORMAL)")
+	return gorm.Open(sqlite.Open(path+"?"+params.Encode()), config)
 }
 
 func initMySQL(dsn string, config *gorm.Config) (*gorm.DB, error) {

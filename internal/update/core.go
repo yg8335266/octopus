@@ -8,8 +8,8 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/bestruirui/octopus/internal/utils/log"
 	"github.com/bestruirui/octopus/internal/utils/shutdown"
+	"github.com/charmbracelet/log"
 )
 
 func UpdateCore() error {
@@ -45,6 +45,7 @@ func UpdateCore() error {
 	return nil
 }
 
+// getDownloadFilename 返回当前平台对应的发布归档名称。
 func getDownloadFilename() (string, error) {
 	arch := runtime.GOARCH
 	goos := runtime.GOOS
@@ -52,28 +53,37 @@ func getDownloadFilename() (string, error) {
 	switch goos {
 	case "windows":
 		switch arch {
-		case "386":
-			return "octopus-windows-x86.zip", nil
 		case "amd64":
-			return "octopus-windows-x86_64.zip", nil
+			return "octopus-windows-amd64.zip", nil
 		}
 	case "darwin":
 		switch arch {
 		case "amd64":
-			return "octopus-darwin-x86_64.zip", nil
+			return "octopus-darwin-amd64.zip", nil
 		case "arm64":
 			return "octopus-darwin-arm64.zip", nil
 		}
 	case "linux":
 		switch arch {
 		case "386":
-			return "octopus-linux-x86.zip", nil
+			return "octopus-linux-386.zip", nil
 		case "amd64":
-			return "octopus-linux-x86_64.zip", nil
+			return "octopus-linux-amd64.zip", nil
 		case "arm":
-			return "octopus-linux-armv7.zip", nil
+			return "octopus-linux-arm.zip", nil
 		case "arm64":
 			return "octopus-linux-arm64.zip", nil
+		}
+	case "android":
+		switch arch {
+		case "386":
+			return "octopus-android-386.zip", nil
+		case "amd64":
+			return "octopus-android-amd64.zip", nil
+		case "arm":
+			return "octopus-android-arm.zip", nil
+		case "arm64":
+			return "octopus-android-arm64.zip", nil
 		}
 	}
 	return "", fmt.Errorf("unsupported platform: %s/%s", goos, arch)

@@ -36,11 +36,5 @@ func SaveCache() error {
 	if err := StatsSaveDB(ctx); err != nil {
 		return err
 	}
-	if err := ChannelKeySaveDB(ctx); err != nil {
-		return err
-	}
-	if err := RelayLogSaveDBTask(ctx); err != nil {
-		return err
-	}
 	return nil
 }
