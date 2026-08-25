@@ -47,6 +47,8 @@
         "setting": "Setting"
     },
     "toolbar": {
+        "hideChannelName": "Blur channel names",
+        "share": "Share",
         "popover": {
             "ariaLabel": "View options",
             "layout": "Layout",
@@ -69,8 +71,8 @@
                 },
                 "model": {
                     "all": "All models",
-                    "priced": "Priced only",
-                    "free": "Free only"
+                    "priced": "Pricing configured",
+                    "free": "Pricing not configured"
                 }
             }
         }
@@ -83,6 +85,11 @@
         }
     },
     "home": {
+        "metric": {
+            "cost": "Cost",
+            "count": "Count",
+            "tokens": "Tokens"
+        },
         "activity": {
             "requestCount": "Requests",
             "waitTime": "Time Consumed",
@@ -110,11 +117,6 @@
             "totalCost": "Total Cost",
             "totalTokens": "Total Tokens",
             "timePeriod": "Time Period",
-            "metricType": {
-                "cost": "Cost",
-                "count": "Count",
-                "tokens": "Tokens"
-            },
             "period": {
                 "today": "Today",
                 "last7Days": "7 Days",
@@ -122,10 +124,8 @@
             }
         },
         "rank": {
-            "title": "Ranking",
-            "sortByCost": "Cost",
-            "sortByCount": "Count",
-            "sortByTokens": "Tokens",
+            "channel": "Channel",
+            "model": "Model",
             "noData": "No ranking data",
             "successRate": "Success Rate"
         }
@@ -163,14 +163,13 @@
             "title": "Backup / Restore",
             "export": {
                 "title": "Export",
-                "includeStats": "Include Stats",
-                "button": "Download JSON",
+                "button": "Export",
                 "exporting": "Exporting...",
                 "success": "Export started"
             },
             "import": {
-                "title": "Import (Incremental)",
-                "button": "Import JSON",
+                "title": "Import",
+                "button": "Import",
                 "importing": "Importing...",
                 "noFile": "Please select a JSON file first",
                 "success": "Import successful",
@@ -185,6 +184,8 @@
             "loadFailed": "Failed to load",
             "form": {
                 "name": "Name",
+                "value": "Key Value",
+                "valuePlaceholder": "Leave empty to generate",
                 "maxCost": "Max Cost",
                 "maxCostPlaceholder": "Enter amount",
                 "unlimited": "Unlimited",
@@ -232,7 +233,17 @@
             "lastUpdate": "Last Update",
             "neverUpdated": "Never updated",
             "updateSuccess": "Price updated successfully",
-            "updateFailed": "Failed to update price"
+            "updateFailed": "Failed to update price",
+            "rebuild": {
+                "label": "Rebuild price data",
+                "description": "Rematch and clean up model prices\nManually configured prices will be reset",
+                "button": "Rebuild",
+                "cancel": "Cancel",
+                "confirm": "Confirm rebuild",
+                "rebuilding": "Rebuilding...",
+                "success": "Price data rebuilt for {count} models",
+                "failed": "Failed to rebuild price data"
+            }
         },
         "llmSync": {
             "title": "Channel Sync",
@@ -254,6 +265,7 @@
             "title": "Account Settings",
             "save": "Save",
             "saving": "Saving...",
+            "cancel": "Cancel",
             "username": {
                 "label": "Change Username",
                 "placeholder": "Enter new username",
@@ -316,8 +328,9 @@
         },
         "card": {
             "empty": "No rules",
-            "active": "Active item",
-            "activate": "Set as active"
+            "activate": "Set as active",
+            "cooling": "Cooling {seconds}s",
+            "affinity": "Affinity {seconds}s"
         },
         "detail": {
             "actions": {
@@ -331,8 +344,25 @@
         },
         "form": {
             "name": "Group Name",
-            "retryInterval": "Retry Interval",
-            "items": "Selected Models",
+            "mode": "Routing Mode",
+            "modeHint": "Manual fixes one member; failover follows member order and switches on failures",
+            "manual": "Manual",
+            "failover": "Failover",
+            "members": "Members",
+            "relay": "Routing",
+            "retryCount": "Maximum Attempts",
+            "retryCountHint": "Total attempts per member, including the first request",
+            "retryInterval": "Retry Interval (s)",
+            "retryIntervalHint": "Wait time between attempts on the same member",
+            "nonStreamTimeout": "Non-stream Timeout (s)",
+            "nonStreamTimeoutHint": "Maximum wait for a complete non-stream response",
+            "streamTimeout": "Stream First Event Timeout (s)",
+            "streamTimeoutHint": "Maximum wait for the first valid stream event",
+            "cooldown": "Cooldown (s)",
+            "cooldownHint": "Time a member is paused after retries are exhausted",
+            "affinity": "Failover Affinity (s)",
+            "affinityHint": "Time to keep the fallback member after its first successful request",
+            "items": "Member Order",
             "addItem": "Add Model",
             "autoAdd": "Auto Add",
             "clear": "Clear"
@@ -378,15 +408,12 @@
             "disconnected": "Log stream disconnected, reconnecting"
         },
         "status": {
-            "running": "Running",
             "committed": "Responding"
         },
         "card": {
             "errorInfo": "Error Info",
             "unknownModel": "Unknown model",
-            "retryIndex": "Retry {index}",
-            "detailUnavailable": "Detail stream unavailable",
-            "noDetail": "No details available",
+            "detailUnavailable": "Body content unavailable",
             "requestContent": "Request Body",
             "group": "Group",
             "groupUnavailable": "No group matches this request model",
@@ -398,9 +425,10 @@
             "noRequestContent": "(No request content)",
             "noResponseContent": "(No response content)",
             "tokens": "tokens",
+            "retryIndex": "Retry {index}",
             "retryDetails": "Retry Details",
-            "stopAttempt": "Stop Attempt",
-            "stopFailed": "Failed to stop attempt",
+            "stopRound": "Stop Current Round",
+            "stopFailed": "Failed to stop current round",
             "waitingChannelSelection": "Waiting for channel selection",
             "waitingResponse": "Waiting for upstream response",
             "responseStreaming": "Upstream responded; streaming is in progress"
@@ -410,47 +438,31 @@
         "card": {
             "requestCount": "Requests",
             "totalCost": "Total Cost",
+            "model": "Model",
+            "successRequests": "Successful Requests",
+            "failedRequests": "Failed Requests",
+            "edit": "Edit",
+            "delete": "Delete",
+            "confirmDelete": "Confirm Delete",
+            "cancel": "Cancel",
             "toast": {
                 "enabled": "Channel enabled",
                 "disabled": "Channel disabled"
             }
         },
-        "detail": {
-            "title": {
-                "edit": "Edit Channel",
-                "view": "Channel Details"
-            },
-            "sections": {
-                "requests": "Request Details",
-                "tokens": "Token Usage",
-                "costs": "Cost Details"
-            },
-            "metrics": {
-                "totalRequests": "Total Requests",
-                "totalToken": "Total Tokens",
-                "totalCost": "Total Cost",
-                "successRequests": "Successful Requests",
-                "failedRequests": "Failed Requests",
-                "inputToken": "Input Tokens",
-                "outputToken": "Output Tokens",
-                "inputCost": "Input Cost",
-                "outputCost": "Output Cost",
-                "avgWaitTime": "Wait Time"
-            },
-            "actions": {
-                "edit": "Edit",
-                "cancel": "Cancel",
-                "save": "Save",
-                "saving": "Saving...",
-                "delete": "Delete",
-                "confirmDelete": "Confirm Delete",
-                "deleting": "Deleting..."
-            }
+        "stats": {
+            "totalRequests": "Total Requests",
+            "totalToken": "Total Tokens",
+            "totalCost": "Total Cost",
+            "avgWaitTime": "Wait Time",
+            "models": "Model",
+            "noModels": "No models selected",
+            "sortByCost": "Cost",
+            "sortByCount": "Count",
+            "sortByTokens": "Tokens"
         },
         "create": {
-            "dialogTitle": "Create New Channel",
-            "submit": "Create Channel",
-            "submitting": "Creating..."
+            "dialogTitle": "Create New Channel"
         },
         "form": {
             "name": "Channel Name",
@@ -486,7 +498,12 @@
             "typeVolcengine": "Volcengine",
             "autoSync": "Auto Sync",
             "matchRegex": "Match Regex",
-            "matchRegexPlaceholder": "Optional: regex pattern to match request model names"
+            "matchRegexPlaceholder": "Optional: regex pattern to match request model names",
+            "submit": "Create Channel",
+            "submitting": "Creating...",
+            "save": "Save",
+            "saving": "Saving...",
+            "cancel": "Cancel"
         }
     }
 }

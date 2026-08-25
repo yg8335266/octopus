@@ -24,11 +24,11 @@
         "logout": "退出",
         "requestCount": "请求次数",
         "timeConsumed": "消耗时间",
-        "totalToken": "消耗 Token",
+        "totalToken": "消耗词元",
         "totalCost": "消耗费用",
-        "inputTokens": "输入 Tokens",
+        "inputTokens": "输入词元",
         "inputCost": "输入费用",
-        "outputTokens": "输出 Tokens",
+        "outputTokens": "输出词元",
         "outputCost": "输出费用",
         "successRequests": "成功请求",
         "failedRequests": "失败请求",
@@ -47,6 +47,8 @@
         "setting": "设置"
     },
     "toolbar": {
+        "hideChannelName": "模糊渠道名称",
+        "share": "分享",
         "popover": {
             "ariaLabel": "视图选项",
             "layout": "布局",
@@ -69,8 +71,8 @@
                 },
                 "model": {
                     "all": "全部模型",
-                    "priced": "仅收费",
-                    "free": "仅免费"
+                    "priced": "已配置价格",
+                    "free": "未配置价格"
                 }
             }
         }
@@ -83,10 +85,15 @@
         }
     },
     "home": {
+        "metric": {
+            "cost": "金额",
+            "count": "次数",
+            "tokens": "词元"
+        },
         "activity": {
             "requestCount": "请求次数",
             "waitTime": "消耗时间",
-            "totalToken": "消耗 Token",
+            "totalToken": "消耗词元",
             "totalCost": "消耗费用",
             "noData": "无数据"
         },
@@ -97,24 +104,19 @@
             "outputStats": "输出统计",
             "requestCount": "请求次数",
             "timeConsumed": "消耗时间",
-            "totalToken": "消耗 Token",
+            "totalToken": "消耗词元",
             "totalCost": "消耗费用",
-            "inputTokens": "输入 Tokens",
+            "inputTokens": "输入词元",
             "inputCost": "输入费用",
-            "outputTokens": "输出 Tokens",
+            "outputTokens": "输出词元",
             "outputCost": "输出费用"
         },
         "chart": {
             "title": "趋势",
             "totalRequests": "请求次数",
             "totalCost": "消费金额",
-            "totalTokens": "Tokens 消耗",
+            "totalTokens": "词元消耗",
             "timePeriod": "时间周期",
-            "metricType": {
-                "cost": "金额",
-                "count": "次数",
-                "tokens": "Tokens"
-            },
             "period": {
                 "today": "今天",
                 "last7Days": "7天",
@@ -122,10 +124,8 @@
             }
         },
         "rank": {
-            "title": "排行榜",
-            "sortByCost": "金额",
-            "sortByCount": "次数",
-            "sortByTokens": "Tokens",
+            "channel": "渠道",
+            "model": "模型",
             "noData": "暂无排行数据",
             "successRate": "成功率"
         }
@@ -163,14 +163,13 @@
             "title": "备份 / 恢复",
             "export": {
                 "title": "导出",
-                "includeStats": "包含统计",
-                "button": "下载 JSON",
+                "button": "导出",
                 "exporting": "导出中...",
                 "success": "开始导出"
             },
             "import": {
-                "title": "导入（增量）",
-                "button": "导入 JSON",
+                "title": "导入",
+                "button": "导入",
                 "importing": "导入中...",
                 "noFile": "请先选择 JSON 文件",
                 "success": "导入成功",
@@ -185,6 +184,8 @@
             "loadFailed": "加载失败",
             "form": {
                 "name": "名称",
+                "value": "密钥值",
+                "valuePlaceholder": "留空自动生成",
                 "maxCost": "最大金额",
                 "maxCostPlaceholder": "请输入金额",
                 "unlimited": "无限制",
@@ -202,8 +203,8 @@
             },
             "stats": {
                 "noData": "暂无统计数据",
-                "inputToken": "输入 Token",
-                "outputToken": "输出 Token",
+                "inputToken": "输入词元",
+                "outputToken": "输出词元",
                 "inputCost": "输入费用",
                 "outputCost": "输出费用",
                 "requestSuccess": "成功请求",
@@ -232,7 +233,17 @@
             "lastUpdate": "上次更新",
             "neverUpdated": "从未更新",
             "updateSuccess": "价格更新成功",
-            "updateFailed": "价格更新失败"
+            "updateFailed": "价格更新失败",
+            "rebuild": {
+                "label": "重建价格数据",
+                "description": "重新匹配并清理模型价格\n会重置手动设置的价格",
+                "button": "重建",
+                "cancel": "取消",
+                "confirm": "确认重建",
+                "rebuilding": "重建中...",
+                "success": "价格数据重建成功，共处理 {count} 个模型",
+                "failed": "价格数据重建失败"
+            }
         },
         "llmSync": {
             "title": "渠道同步",
@@ -254,6 +265,7 @@
             "title": "账户设置",
             "save": "保存",
             "saving": "保存中...",
+            "cancel": "取消",
             "username": {
                 "label": "修改用户名",
                 "placeholder": "请输入新用户名",
@@ -316,8 +328,9 @@
         },
         "card": {
             "empty": "暂无规则",
-            "active": "当前活动项",
-            "activate": "设为活动项"
+            "activate": "设为活动项",
+            "cooling": "冷却 {seconds}s",
+            "affinity": "亲和 {seconds}s"
         },
         "detail": {
             "actions": {
@@ -331,8 +344,25 @@
         },
         "form": {
             "name": "分组名称",
-            "retryInterval": "重试间隔",
-            "items": "已选模型",
+            "mode": "路由模式",
+            "modeHint": "手动固定选中成员；故障转移按成员顺序并在失败时切换",
+            "manual": "手动",
+            "failover": "故障转移",
+            "members": "成员",
+            "relay": "路由策略",
+            "retryCount": "总尝试次数",
+            "retryCountHint": "单个成员包含首次请求的总尝试次数",
+            "retryInterval": "重试间隔（秒）",
+            "retryIntervalHint": "同一成员相邻两次尝试的等待时间",
+            "nonStreamTimeout": "非流式超时（秒）",
+            "nonStreamTimeoutHint": "等待完整非流式响应的最长时间",
+            "streamTimeout": "流式首事件超时（秒）",
+            "streamTimeoutHint": "等待首个有效流事件的最长时间",
+            "cooldown": "冷却时间（秒）",
+            "cooldownHint": "成员重试耗尽后暂停使用的时间",
+            "affinity": "故障切换亲和时间（秒）",
+            "affinityHint": "备用成员首次请求成功后继续使用该成员的时间",
+            "items": "成员顺序",
             "addItem": "添加模型",
             "autoAdd": "自动添加",
             "clear": "清空"
@@ -378,15 +408,12 @@
             "disconnected": "日志连接已断开，正在重连"
         },
         "status": {
-            "running": "处理中",
             "committed": "响应中"
         },
         "card": {
             "errorInfo": "错误信息",
             "unknownModel": "未知模型",
-            "retryIndex": "重试 {index}",
-            "detailUnavailable": "详情连接不可用",
-            "noDetail": "暂无详情",
+            "detailUnavailable": "正文内容不可用",
             "requestContent": "请求体",
             "group": "分组",
             "groupUnavailable": "当前请求模型没有对应分组",
@@ -397,10 +424,11 @@
             "responseContent": "响应内容",
             "noRequestContent": "(无请求内容)",
             "noResponseContent": "(无响应内容)",
-            "tokens": "tokens",
+            "tokens": "词元",
+            "retryIndex": "重试 {index}",
             "retryDetails": "重试详情",
-            "stopAttempt": "停止本次尝试",
-            "stopFailed": "停止失败",
+            "stopRound": "停止当前轮次",
+            "stopFailed": "停止当前轮次失败",
             "waitingChannelSelection": "正在等待选择渠道",
             "waitingResponse": "正在等待上游响应",
             "responseStreaming": "上游已响应，流式传输正在进行"
@@ -410,47 +438,31 @@
         "card": {
             "requestCount": "请求次数",
             "totalCost": "总成本",
+            "model": "模型",
+            "successRequests": "成功请求",
+            "failedRequests": "失败请求",
+            "edit": "编辑",
+            "delete": "删除",
+            "confirmDelete": "确认删除",
+            "cancel": "取消",
             "toast": {
                 "enabled": "渠道已启用",
                 "disabled": "渠道已禁用"
             }
         },
-        "detail": {
-            "title": {
-                "edit": "编辑渠道",
-                "view": "渠道详情"
-            },
-            "sections": {
-                "requests": "请求详情",
-                "tokens": "Token 使用",
-                "costs": "成本详情"
-            },
-            "metrics": {
-                "totalRequests": "总请求",
-                "totalToken": "总 Token",
-                "totalCost": "总成本",
-                "successRequests": "成功请求",
-                "failedRequests": "失败请求",
-                "inputToken": "输入 Token",
-                "outputToken": "输出 Token",
-                "inputCost": "输入成本",
-                "outputCost": "输出成本",
-                "avgWaitTime": "等待时间"
-            },
-            "actions": {
-                "edit": "编辑",
-                "cancel": "取消",
-                "save": "保存",
-                "saving": "保存中...",
-                "delete": "删除",
-                "confirmDelete": "确认删除",
-                "deleting": "删除中..."
-            }
+        "stats": {
+            "totalRequests": "总请求",
+            "totalToken": "总词元",
+            "totalCost": "总成本",
+            "avgWaitTime": "等待时间",
+            "models": "模型",
+            "noModels": "暂未选择模型",
+            "sortByCost": "金额",
+            "sortByCount": "次数",
+            "sortByTokens": "词元"
         },
         "create": {
-            "dialogTitle": "创建新渠道",
-            "submit": "创建渠道",
-            "submitting": "创建中..."
+            "dialogTitle": "创建新渠道"
         },
         "form": {
             "name": "渠道名称",
@@ -486,7 +498,12 @@
             "typeVolcengine": "火山引擎",
             "autoSync": "自动同步",
             "matchRegex": "匹配正则",
-            "matchRegexPlaceholder": "可选：用于匹配请求模型名称的正则表达式"
+            "matchRegexPlaceholder": "可选：用于匹配请求模型名称的正则表达式",
+            "submit": "创建渠道",
+            "submitting": "创建中...",
+            "save": "保存",
+            "saving": "保存中...",
+            "cancel": "取消"
         }
     }
 }

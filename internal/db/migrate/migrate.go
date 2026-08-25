@@ -3,6 +3,7 @@ package migrate
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -132,4 +133,35 @@ func upsertMigrationRecord(db *gorm.DB, version int, status MigrationRecordStatu
 		Columns:   []clause.Column{{Name: "version"}},
 		DoUpdates: clause.AssignmentColumns([]string{"status"}),
 	}).Create(&rec).Error
+}
+
+// hasPhysicalColumn 判断数据库表中是否存在指定列，不依赖当前模型是否仍声明该字段。
+func hasPhysicalColumn(db *gorm.DB, table, column string) bool {
+	columnTypes, err := db.Migrator().ColumnTypes(table)
+	if err != nil {
+		return false
+	}
+	for _, columnType := range columnTypes {
+		if strings.EqualFold(columnType.Name(), column) {
+			return true
+		}
+	}
+	return false
+}
+
+// dropColumnIfExists 删除指定表中存在的列，兼容 SQLite、MySQL 和 PostgreSQL。
+func dropColumnIfExists(db *gorm.DB, model interface{}, table, column string) error {
+	if !hasPhysicalColumn(db, table, column) {
+		return nil
+	}
+	if db.Dialector.Name() == "sqlite" {
+		if err := db.Exec(fmt.Sprintf(`ALTER TABLE %q DROP COLUMN %q`, table, column)).Error; err != nil {
+			return fmt.Errorf("failed to drop %s.%s: %w", table, column, err)
+		}
+		return nil
+	}
+	if err := db.Migrator().DropColumn(model, column); err != nil {
+		return fmt.Errorf("failed to drop %s.%s: %w", table, column, err)
+	}
+	return nil
 }

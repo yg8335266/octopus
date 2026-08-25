@@ -1,8 +1,8 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { memo, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Trash2, X, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { type Group, type GroupUpdateRequest, useDeleteGroup, useUpdateGroup, useUpdateGroupActiveItem } from '@/api/group';
-import { useModelChannelList } from '@/api/model';
+import { useChannelList } from '@/api/channel';
 import { useTranslations } from 'use-intl';
 import { toast } from 'sonner';
 import { CopyIconButton } from '@/components/common/CopyButton';
@@ -10,7 +10,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { SelectedMember } from './ItemList';
 import { MemberList } from './ItemList';
 import { GroupEditor, type GroupEditorValues } from './Editor';
-import { buildChannelNameByModelKey, modelChannelKey } from './utils';
 import {
     MorphingDialog,
     MorphingDialogClose,
@@ -47,7 +46,8 @@ function EditDialogContent({ group, displayMembers, isSubmitting, onSubmit }: Ed
                     key={`edit-group-${group.id}`}
                     initial={{
                         name: group.name,
-                        retry_interval: group.retry_interval,
+                        mode: group.mode,
+                        relay_config: group.relay_config,
                         members: displayMembers,
                     }}
                     submitText={t('detail.actions.save')}
@@ -61,38 +61,42 @@ function EditDialogContent({ group, displayMembers, isSubmitting, onSubmit }: Ed
     );
 }
 
-export function GroupCard({ group }: { group: Group }) {
+export const GroupCard = memo(function GroupCard({ group, now }: { group: Group; now: number }) {
     const t = useTranslations('group');
     const updateGroup = useUpdateGroup();
     const updateActiveItem = useUpdateGroupActiveItem();
     const deleteGroup = useDeleteGroup();
-    const { data: modelChannels = [] } = useModelChannelList();
+    const { data: channelsData = [] } = useChannelList();
 
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [members, setMembers] = useState<SelectedMember[]>([]);
     const isDragging = useRef(false);
 
-    const channelNameByKey = useMemo(() => buildChannelNameByModelKey(modelChannels), [modelChannels]);
-    const enabledByKey = useMemo(() => {
-        const map = new Map<string, boolean>();
-        modelChannels.forEach((mc) => {
-            map.set(modelChannelKey(mc.channel_id, mc.name), mc.enabled);
+    const channelByModelID = useMemo(() => {
+        const map = new Map<number, { channel_name: string; enabled: boolean }>();
+        channelsData.forEach(({ raw: channel }) => {
+            channel.models.forEach((channelModel) => {
+                map.set(channelModel.id, { channel_name: channel.name, enabled: channel.enabled });
+            });
         });
         return map;
-    }, [modelChannels]);
+    }, [channelsData]);
 
     const displayMembers = useMemo((): SelectedMember[] =>
-        [...(group.items || [])]
-            .sort((a, b) => a.priority - b.priority)
-            .map((item) => ({
-                id: modelChannelKey(item.channel_id, item.model_name),
-                name: item.model_name,
-                enabled: enabledByKey.get(modelChannelKey(item.channel_id, item.model_name)) ?? true,
-                channel_id: item.channel_id,
-                channel_name: channelNameByKey.get(modelChannelKey(item.channel_id, item.model_name)) ?? `Channel ${item.channel_id}`,
+        (group.items || []).map((item) => {
+            const channelModel = item.channel_model;
+            const channel = channelByModelID.get(item.channel_model_id);
+            return {
+                id: String(item.channel_model_id),
+                channel_model_id: item.channel_model_id,
+                name: channelModel?.name ?? `Model ${item.channel_model_id}`,
+                enabled: channel?.enabled ?? true,
+                channel_id: channelModel?.channel_id ?? 0,
+                channel_name: channel?.channel_name ?? 'Unknown channel',
                 item_id: item.id,
-            })),
-        [group.items, channelNameByKey, enabledByKey]
+            };
+        }),
+        [group.items, channelByModelID]
     );
 
     useEffect(() => {
@@ -131,17 +135,16 @@ export function GroupCard({ group }: { group: Group }) {
     }, [members, group.id, updateGroup, onSuccess, onError]);
 
     const handleActivate = useCallback((itemId: number) => {
-        if (!group.id || itemId === group.active_item_id || updateActiveItem.isPending) return;
+        if (!group.id || group.mode !== 'manual' || itemId === group.active_item_id || updateActiveItem.isPending) return;
         updateActiveItem.mutate({ groupId: group.id, itemId }, { onSuccess, onError });
-    }, [group.active_item_id, group.id, onError, onSuccess, updateActiveItem]);
+    }, [group.active_item_id, group.id, group.mode, onError, onSuccess, updateActiveItem]);
 
     const handleSubmitEdit = useCallback((values: GroupEditorValues, onDone?: () => void) => {
         if (!group.id) return;
 
-        const originalItems = [...(group.items || [])].sort((a, b) => a.priority - b.priority);
         const originalById = new Map<number, number>();
         const originalIds = new Set<number>();
-        originalItems.forEach((it) => {
+        (group.items || []).forEach((it) => {
             if (typeof it.id === 'number') {
                 originalIds.add(it.id);
                 originalById.set(it.id, it.priority);
@@ -157,8 +160,7 @@ export function GroupCard({ group }: { group: Group }) {
             .map((m, idx) => ({ m, priority: idx + 1 }))
             .filter(({ m }) => typeof m.item_id !== 'number')
             .map(({ m, priority }) => ({
-                channel_id: m.channel_id,
-                model_name: m.name,
+                channel_model_id: m.channel_model_id,
                 priority,
             }));
 
@@ -174,10 +176,17 @@ export function GroupCard({ group }: { group: Group }) {
             .filter((item): item is { id: number; priority: number } => item !== null);
 
         const payload: GroupUpdateRequest = { id: group.id };
-        const nextName = values.name.trim();
 
-        if (nextName && nextName !== group.name) payload.name = nextName;
-        if (values.retry_interval !== group.retry_interval) payload.retry_interval = values.retry_interval;
+        if (values.name !== group.name) payload.name = values.name;
+        if (values.mode !== group.mode) payload.mode = values.mode;
+        if (
+            values.relay_config.member_max_attempts !== group.relay_config.member_max_attempts ||
+            values.relay_config.member_retry_interval_seconds !== group.relay_config.member_retry_interval_seconds ||
+            values.relay_config.member_non_stream_response_timeout_seconds !== group.relay_config.member_non_stream_response_timeout_seconds ||
+            values.relay_config.member_stream_first_event_timeout_seconds !== group.relay_config.member_stream_first_event_timeout_seconds ||
+            values.relay_config.member_cooldown_seconds !== group.relay_config.member_cooldown_seconds ||
+            values.relay_config.member_affinity_seconds !== group.relay_config.member_affinity_seconds
+        ) payload.relay_config = values.relay_config;
         if (items_to_add.length) payload.items_to_add = items_to_add;
         if (items_to_update.length) payload.items_to_update = items_to_update;
         if (items_to_delete.length) payload.items_to_delete = items_to_delete;
@@ -194,7 +203,7 @@ export function GroupCard({ group }: { group: Group }) {
             },
             onError,
         });
-    }, [group.id, group.items, group.name, group.retry_interval, onSuccess, onError, updateGroup]);
+    }, [group.id, group.items, group.mode, group.name, group.relay_config, onSuccess, onError, updateGroup]);
 
     return (
     <article className="flex flex-col rounded-3xl border border-border bg-card text-card-foreground p-4">
@@ -284,8 +293,10 @@ export function GroupCard({ group }: { group: Group }) {
                     members={members}
                     onReorder={setMembers}
                     onRemove={handleRemoveMember}
-                    onActivate={handleActivate}
-                    activeItemId={group.active_item_id}
+                    onActivate={group.mode === 'manual' ? handleActivate : undefined}
+                    activeItemId={group.mode === 'failover' ? group.runtime?.current_item_id : group.active_item_id}
+                    group={group}
+                    now={now}
                     onDragStart={handleDragStart}
                     onDrop={handleDropReorder}
                     onDragFinish={handleDragFinish}
@@ -295,4 +306,4 @@ export function GroupCard({ group }: { group: Group }) {
             </section>
         </article >
     );
-}
+});

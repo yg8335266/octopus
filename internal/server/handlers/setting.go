@@ -82,9 +82,7 @@ func setSetting(c *gin.Context) {
 }
 
 func exportDB(c *gin.Context) {
-	includeStats, _ := strconv.ParseBool(c.DefaultQuery("include_stats", "false"))
-
-	dump, err := op.DBExportAll(c.Request.Context(), includeStats)
+	dump, err := op.DBExportAll(c.Request.Context())
 	if err != nil {
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -132,13 +130,40 @@ func importDB(c *gin.Context) {
 		}
 	}
 
+	seenLLMNames := make(map[string]struct{}, len(dump.LLMInfos))
+	for i := range dump.LLMInfos {
+		dump.LLMInfos[i].Name = strings.ToLower(strings.TrimSpace(dump.LLMInfos[i].Name))
+		if dump.LLMInfos[i].Name == "" {
+			resp.Error(c, http.StatusBadRequest, "model price name cannot be empty")
+			return
+		}
+		if _, ok := seenLLMNames[dump.LLMInfos[i].Name]; ok {
+			resp.Error(c, http.StatusBadRequest, "duplicate model price: "+dump.LLMInfos[i].Name)
+			return
+		}
+		seenLLMNames[dump.LLMInfos[i].Name] = struct{}{}
+	}
+	for i := range dump.Groups {
+		if dump.Groups[i].Mode == "" {
+			dump.Groups[i].Mode = model.GroupModeManual
+		}
+		model.NormalizeGroupRelayConfig(&dump.Groups[i].RelayConfig)
+		if dump.Groups[i].Mode != model.GroupModeManual && dump.Groups[i].Mode != model.GroupModeFailover {
+			resp.Error(c, http.StatusBadRequest, "invalid group relay mode")
+			return
+		}
+	}
+
 	result, err := op.DBImportIncremental(c.Request.Context(), &dump)
 	if err != nil {
 		resp.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	_ = op.InitCache()
+	if err := op.InitCache(); err != nil {
+		resp.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	resp.Success(c, result)
 }
@@ -155,6 +180,7 @@ func decodeDBDump(body []byte, dump *model.DBDump) error {
 	if dump.Version == 0 &&
 		len(dump.Channels) == 0 &&
 		len(dump.Groups) == 0 &&
+		len(dump.ChannelModels) == 0 &&
 		len(dump.GroupItems) == 0 &&
 		len(dump.Settings) == 0 &&
 		len(dump.APIKeys) == 0 &&
@@ -162,8 +188,6 @@ func decodeDBDump(body []byte, dump *model.DBDump) error {
 		len(dump.StatsDaily) == 0 &&
 		len(dump.StatsHourly) == 0 &&
 		len(dump.StatsTotal) == 0 &&
-		len(dump.StatsChannel) == 0 &&
-		len(dump.StatsModel) == 0 &&
 		len(dump.StatsAPIKey) == 0 {
 		var wrapper struct {
 			Code    int             `json:"code"`

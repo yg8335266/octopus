@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/bestruirui/octopus/internal/helper"
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
+	"github.com/bestruirui/octopus/internal/price"
 	"github.com/bestruirui/octopus/internal/server/middleware"
 	"github.com/bestruirui/octopus/internal/server/resp"
 	"github.com/bestruirui/octopus/internal/server/router"
@@ -58,16 +58,7 @@ func init() {
 }
 
 func listChannel(c *gin.Context) {
-	channels, err := op.ChannelList(c.Request.Context())
-	if err != nil {
-		resp.Error(c, http.StatusInternalServerError, err.Error())
-		return
-	}
-	for i, channel := range channels {
-		stats := op.StatsChannelGet(channel.ID)
-		channels[i].Stats = &stats
-	}
-	resp.Success(c, channels)
+	resp.Success(c, op.ChannelList())
 }
 
 func createChannel(c *gin.Context) {
@@ -80,15 +71,14 @@ func createChannel(c *gin.Context) {
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	stats := op.StatsChannelGet(channel.ID)
-	channel.Stats = &stats
-	go func(channel *model.Channel) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		modelStr := channel.Model + "," + channel.CustomModel
-		modelArray := strings.Split(modelStr, ",")
-		helper.LLMPriceAddToDB(modelArray, ctx)
-	}(&channel)
+	modelNames := make([]string, 0, len(channel.Models))
+	for _, channelModel := range channel.Models {
+		modelNames = append(modelNames, channelModel.Name)
+	}
+	if err := addChannelModelPrices(modelNames, c.Request.Context()); err != nil {
+		resp.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	resp.Success(c, channel)
 }
 
@@ -103,15 +93,18 @@ func updateChannel(c *gin.Context) {
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	stats := op.StatsChannelGet(channel.ID)
-	channel.Stats = &stats
-	go func(channel *model.Channel) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		modelStr := channel.Model + "," + channel.CustomModel
-		modelArray := strings.Split(modelStr, ",")
-		helper.LLMPriceAddToDB(modelArray, ctx)
-	}(channel)
+	newModelNames := make([]string, 0, len(channel.Models))
+	for _, channelModel := range channel.Models {
+		newModelNames = append(newModelNames, channelModel.Name)
+	}
+	if err := addChannelModelPrices(newModelNames, c.Request.Context()); err != nil {
+		resp.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := op.LLMCleanupGhosts(c.Request.Context()); err != nil {
+		resp.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	resp.Success(c, channel)
 }
 
@@ -132,18 +125,41 @@ func enableChannel(c *gin.Context) {
 }
 
 func deleteChannel(c *gin.Context) {
-	id := c.Param("id")
-	idNum, err := strconv.Atoi(id)
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		resp.Error(c, http.StatusBadRequest, resp.ErrInvalidParam)
 		return
 	}
-	if err := op.ChannelDel(idNum, c.Request.Context()); err != nil {
+	if err := op.ChannelDel(id, c.Request.Context()); err != nil {
+		resp.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := op.LLMCleanupGhosts(c.Request.Context()); err != nil {
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	resp.Success(c, nil)
 }
+
+// addChannelModelPrices 为渠道模型匹配校准价格，并批量写入尚不存在的价格记录。
+func addChannelModelPrices(modelNames []string, ctx context.Context) error {
+	seen := make(map[string]struct{}, len(modelNames))
+	llmInfos := make([]model.LLMInfo, 0, len(modelNames))
+	for _, modelName := range modelNames {
+		modelName = strings.ToLower(modelName)
+		if _, ok := seen[modelName]; ok {
+			continue
+		}
+		seen[modelName] = struct{}{}
+		llmInfo := model.LLMInfo{Name: modelName}
+		if modelPrice := price.GetLLMPrice(modelName); modelPrice != nil {
+			llmInfo.LLMPrice = *modelPrice
+		}
+		llmInfos = append(llmInfos, llmInfo)
+	}
+	return op.LLMBatchCreate(llmInfos, ctx)
+}
+
 func fetchModel(c *gin.Context) {
 	var request model.Channel
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -159,11 +175,13 @@ func fetchModel(c *gin.Context) {
 }
 
 func syncChannel(c *gin.Context) {
-	task.SyncModelsTask()
+	if err := task.SyncModelsTask(); err != nil {
+		resp.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	resp.Success(c, nil)
 }
 
 func getLastSyncTime(c *gin.Context) {
-	time := task.GetLastSyncModelsTime()
-	resp.Success(c, time)
+	resp.Success(c, task.GetLastSyncModelsTime())
 }
