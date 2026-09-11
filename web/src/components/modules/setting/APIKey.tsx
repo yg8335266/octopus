@@ -56,14 +56,6 @@ function normalizeMoneyInput(input: string): string {
     return rest.length > 0 ? `${intPart}.${rest.join('').slice(0, 6)}` : intPart;
 }
 
-function toggleModel(current: string | undefined, model: string): string | undefined {
-    const models = current ? current.split(',').filter(Boolean) : [];
-    const next = models.includes(model)
-        ? models.filter((m) => m !== model)
-        : [...models, model];
-    return next.length ? next.join(',') : undefined;
-}
-
 type APIKeyFormData = Omit<APIKey, 'id'>;
 
 interface APIKeyFormProps {
@@ -84,7 +76,7 @@ function APIKeyForm({ apiKey, isPending, submitLabel, onSubmit, onClose }: APIKe
         enabled: apiKey?.enabled ?? true,
         expire_at: apiKey?.expire_at,
         max_cost: apiKey?.max_cost,
-        supported_models: apiKey?.supported_models,
+        supported_models: apiKey?.supported_models ?? [],
     }));
     const [maxCostInput, setMaxCostInput] = useState(() =>
         apiKey?.max_cost != null ? String(apiKey.max_cost) : ''
@@ -100,8 +92,8 @@ function APIKeyForm({ apiKey, isPending, submitLabel, onSubmit, onClose }: APIKe
     });
     const [expireOpen, setExpireOpen] = useState(false);
 
-    const availableModels = Array.from(new Set(groups.map((g) => g.name).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-    const supportedModels = new Set(form.supported_models?.split(',').filter(Boolean));
+    const availableModels = Array.from(new Set(groups.map((g) => g.name).filter(Boolean)));
+    const supportedModels = new Set(form.supported_models);
 
     const expireDate = parseExpireDate(form.expire_at);
     const neverExpire = !form.expire_at;
@@ -297,7 +289,11 @@ function APIKeyForm({ apiKey, isPending, submitLabel, onSubmit, onClose }: APIKe
                                         key={m}
                                         type="button"
                                         disabled={isPending}
-                                        onClick={() => updateForm({ supported_models: toggleModel(form.supported_models, m) })}
+                                        onClick={() => updateForm({
+                                            supported_models: checked
+                                                ? form.supported_models.filter((name) => name !== m)
+                                                : [...form.supported_models, m],
+                                        })}
                                         className="text-left disabled:opacity-50"
                                     >
                                         <Badge
@@ -503,7 +499,6 @@ function APIKeyKeyItem({
                     layoutId={statsLayoutId}
                     onClick={onViewStats}
                     className="flex size-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
-                    title="Stats"
                 >
                     <Info className="size-4" />
                 </motion.button>
@@ -512,7 +507,6 @@ function APIKeyKeyItem({
                     layoutId={editLayoutId}
                     onClick={onEdit}
                     className="flex size-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
-                    title="Edit"
                 >
                     <Pencil className="size-4" />
                 </motion.button>
@@ -592,7 +586,7 @@ function APIKeyPanelBase({
     const [editingKey, setEditingKey] = useState<APIKey | null>(null);
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
-    const sortedApiKeys = apiKeys ? [...apiKeys].sort((a, b) => a.id - b.id) : [];
+    const apiKeyList = apiKeys ?? [];
 
     const handleDelete = (id: number) => {
         setDeletingId(id);
@@ -656,7 +650,6 @@ function APIKeyPanelBase({
                         onClick={() => setIsAdding(true)}
                         disabled={disabledHeaderActions}
                         className="h-9 w-9 flex items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        title={t('apiKey.add')}
                     >
                         <Plus className="size-4" />
                     </motion.button>
@@ -714,7 +707,7 @@ function APIKeyPanelBase({
                     </div>
                 ) : (
                     <AnimatePresence>
-                        {sortedApiKeys.map((apiKey) => {
+                        {apiKeyList.map((apiKey) => {
                             const statsLayoutId = `${statsPrefix}-${apiKey.id}`;
                             const editLayoutId = `${editPrefix}-${apiKey.id}`;
                             const deleteLayoutId = `${deletePrefix}${apiKey.id}`;
@@ -757,7 +750,6 @@ function APIKeyDialogPanel() {
                     type="button"
                     onClick={() => setIsOpen(false)}
                     className="h-9 w-9 flex items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors hover:bg-muted"
-                    title="Close"
                 >
                     <X className="size-4" />
                 </button>

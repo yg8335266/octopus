@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bestruirui/octopus/internal/client"
 	"github.com/bestruirui/octopus/internal/conf"
+	"github.com/bestruirui/octopus/internal/rhttp"
 	"github.com/charmbracelet/log"
 )
 
@@ -46,7 +46,13 @@ func doRequest(url string, useProxy bool) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	hc, err := client.GetHTTPClientSystemProxy(useProxy)
+	var hc *http.Client
+	var err error
+	if useProxy {
+		hc, err = rhttp.Proxy()
+	} else {
+		hc, err = rhttp.Direct()
+	}
 	if err != nil {
 		return nil, err
 	}

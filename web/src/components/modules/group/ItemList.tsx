@@ -17,11 +17,13 @@ import { MemberStatus } from './MemberStatus';
 
 export interface SelectedMember {
     id: string;
-    channel_model_id: number;
+    channel_grant_id: number;
     name: string;
     enabled: boolean;
     channel_id: number;
     channel_name: string;
+    key_name: string;
+    protocols: number;
     item_id?: number;
 }
 
@@ -67,9 +69,6 @@ function MemberItem({
     const { Icon, className: iconClassName } = getModelIcon(member.name);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const isDisabled = member.enabled === false;
-    const activationTitle = onActivate && member.item_id !== undefined && !isActive
-        ? t('card.activate')
-        : undefined;
 
     return (
         <div
@@ -102,7 +101,6 @@ function MemberItem({
                 }}
                 role={onActivate && member.item_id !== undefined ? 'button' : undefined}
                 tabIndex={onActivate && member.item_id !== undefined ? 0 : undefined}
-                title={activationTitle}
             >
                 <div
                     className={cn(
@@ -136,7 +134,9 @@ function MemberItem({
                             {member.name}
                         </TooltipContent>
                     </Tooltip>
-                    <span className="text-[10px] text-muted-foreground truncate leading-tight">{member.channel_name}</span>
+                    <span className="text-[10px] text-muted-foreground truncate leading-tight">
+                        {member.key_name ? `${member.channel_name} · ${member.key_name}` : member.channel_name}
+                    </span>
                 </div>
 
                 {group && <MemberStatus group={group} itemId={member.item_id} now={now} active={isActive} activeClassName="p-1" />}

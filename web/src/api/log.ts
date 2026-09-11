@@ -23,11 +23,16 @@ export interface RelayLogOverview {
     started_at: string;
     duration: number;
     model: string;
+    protocol: number;
+    group_id: number;
+    api_key_name: string;
     usage: RelayUsage;
     cost: number;
     round: number;
+    round_started_at: string;
     target_channel: string;
     target_model: string;
+    target_protocol: number;
     sending: boolean;
     error?: string;
 }
@@ -114,5 +119,5 @@ export function useLogResponseBody(id: number, startedAt: string, enabled: boole
         queryFn: () => apiRequest<string>(`/api/v1/log/${id}/response-body`),
         enabled,
         staleTime: Infinity,
-	});
+    });
 }
