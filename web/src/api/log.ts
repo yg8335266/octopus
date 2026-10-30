@@ -22,15 +22,20 @@ export interface RelayLogOverview {
     status: RequestState;
     started_at: string;
     duration: number;
+    first_token_duration: number;
+    stream_duration: number;
+    response_duration: number;
     model: string;
+    reasoning_effort: string;
     protocol: number;
     group_id: number;
     api_key_name: string;
     usage: RelayUsage;
     cost: number;
+    output_chars: number;
     round: number;
     round_started_at: string;
-    target_channel: string;
+    target_channel_key: string; // 本轮选中的渠道名称和 Key 名称, 以空格分隔。
     target_model: string;
     target_protocol: number;
     sending: boolean;
@@ -44,11 +49,11 @@ export function useClearLogs() {
     });
 }
 
-// useStopRound 中止指定请求当前轮次匹配的上游调用。
-export function useStopRound() {
+// useStopRequest 按是否提供轮次参数, 中止单个轮次或整个请求。
+export function useStopRequest() {
     return useMutation({
-        mutationFn: ({ requestId, round }: { requestId: number; round: number }) =>
-            apiRequest<null>(`/api/v1/log/${requestId}/${round}/stop`, { method: 'POST' }),
+        mutationFn: ({ requestId, round }: { requestId: number; round?: number }) =>
+            apiRequest<null>(`/api/v1/log/stop/${requestId}${round === undefined ? '' : `/${round}`}`, { method: 'POST' }),
     });
 }
 
@@ -59,7 +64,7 @@ export function useLogs() {
     const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
-        const source = new EventSource('/api/v1/log/overview/stream', { withCredentials: true });
+        const source = new EventSource('./api/v1/log/overview/stream', { withCredentials: true });
 
         source.onopen = () => {
             setError(null);
@@ -106,7 +111,7 @@ export function useLogs() {
 export function useLogRequestBody(id: number, startedAt: string, enabled: boolean) {
     return useQuery({
         queryKey: ['logs', id, startedAt, 'request-body'],
-        queryFn: () => apiRequest<string>(`/api/v1/log/${id}/request-body`),
+        queryFn: () => apiRequest<string>(`/api/v1/log/request-body/${id}`),
         enabled,
         staleTime: Infinity,
     });
@@ -116,7 +121,7 @@ export function useLogRequestBody(id: number, startedAt: string, enabled: boolea
 export function useLogResponseBody(id: number, startedAt: string, enabled: boolean) {
     return useQuery({
         queryKey: ['logs', id, startedAt, 'response-body'],
-        queryFn: () => apiRequest<string>(`/api/v1/log/${id}/response-body`),
+        queryFn: () => apiRequest<string>(`/api/v1/log/response-body/${id}`),
         enabled,
         staleTime: Infinity,
     });
